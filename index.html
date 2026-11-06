@@ -273,7 +273,7 @@ canvas{max-width:100%}
 
 <section class="sec" id="s-refis">
   <div class="card">
-    <div class="ch"><div><h3>Refinanciamientos según el sistema</h3><div class="sub">Del Detalle por Clientes: todas las fechas de vencimiento, solo Origen Factura = Refinanciamiento y <b>Fecha Crédito del mes actual</b> (del día 1 a hoy). Monto = Saldo Crédito Final.</div></div></div>
+    <div class="ch"><div><h3>Refinanciamientos según el sistema</h3><div class="sub">Del Detalle por Clientes: todas las fechas de vencimiento, solo Origen Factura = Refinanciamiento y <b>Fecha Crédito del mes actual</b> (del día 1 a hoy). Monto = Saldo Crédito Final más alto registrado. Se acumulan: un refinanciamiento guardado no se pierde aunque el crédito se cancele.</div></div></div>
     <div class="fbar"><span class="chip gold on" id="rfRangoLbl"></span><span class="sm mut" id="rfAct"></span></div>
     <input type="hidden" id="rfDesde"><input type="hidden" id="rfHasta">
     <div class="grid g4" id="rfKpis"></div>
@@ -282,6 +282,7 @@ canvas{max-width:100%}
     <div class="card"><h3>Refinanciamientos por cobrador</h3><div class="sub">Cantidad y monto frente a la meta mensual de refinanciamiento</div><div class="tw"><table id="tbRefi"></table></div></div>
     <div class="card"><h3>Refinanciamientos por día</h3><div class="sub">Según Fecha Crédito del mes</div><div class="chartbox"><canvas id="chRefi"></canvas></div></div>
   </div>
+  <div class="card" style="margin-top:14px"><h3>Fotos diarias de refinanciamientos</h3><div class="sub">Lo que llevaba cada cobrador en el mes en cada carga</div><div class="tw" style="max-height:420px"><table id="tbRefiHist"></table></div></div>
   <div class="card" style="margin-top:14px">
     <div class="ch"><div><h3>Detalle de créditos refinanciados</h3></div><div style="display:flex;gap:8px"><select id="rfCob" class="inp" style="width:auto" onchange="renderRefis()"></select><button class="btn ghost sm" onclick="exportRefis()">⬇ Excel</button></div></div>
     <div class="tw"><table id="tbRefiDet"></table></div>
@@ -313,6 +314,7 @@ canvas{max-width:100%}
       <button class="btn ghost sm" onclick="exportListado()">⬇ Excel del filtro</button></div>
     <div class="qv" id="lsQv"></div>
     <div class="fbar">
+      <select id="lsFoto" class="inp" onchange="cambiarFoto(this.value)" title="Foto del día"><option value="">📅 Listado actual</option></select>
       <input id="lsQ" class="inp" placeholder="🔎 Cliente o cédula" oninput="lsPage=0;renderListado()" style="min-width:200px">
       <select id="lsCob" class="inp" onchange="lsPage=0;renderListado()"></select>
       <select id="lsCal" class="inp" onchange="lsPage=0;renderListado()"><option value="">Calificación: todas</option></select>
@@ -323,6 +325,7 @@ canvas{max-width:100%}
     <div class="tw"><table id="tbLs"></table></div>
     <div class="pager" id="lsPager"></div>
   </div>
+  <div class="card" style="margin-top:14px"><h3>Evolución diaria del listado</h3><div class="sub">Una foto por cada día que publicas el listado (respeta el filtro de cobrador)</div><div class="tw" style="max-height:420px"><table id="tbLsHist"></table></div></div>
   <div class="card" style="margin-top:14px" id="lsSieCard">
     <h3>Cartera siembra 1-2-3 por cobrador</h3><div class="sub">Clientes cuyo crédito más atrasado está en la cuota 1, 2 o 3 (Nro Vencimiento Final)</div>
     <div class="tw"><table id="tbSie"></table></div>
@@ -579,7 +582,7 @@ const DB={
 /* =====================================================================
    ESTADO Y SESIÓN
    ===================================================================== */
-const S={rol:null,cob:null,email:'',mes:hoyYMD().slice(0,7),metas:null,regs:[],listado:{},refis:{},mora:[],estado:{},equipo:{},unsub:[]};
+const S={lsHist:[],refisHist:[],lsFoto:null,rol:null,cob:null,email:'',mes:hoyYMD().slice(0,7),metas:null,regs:[],listado:{},refis:{},mora:[],estado:{},equipo:{},unsub:[]};
 function metasDefault(){const o={};COBS.forEach(c=>o[c.id]={rm:c.rm,fm:c.fm});return o;}
 function metaDe(id){const m=(S.metas&&S.metas[id])||metasDefault()[id]||{rm:0,fm:0};return {rm:+m.rm||0,fm:+m.fm||0};}
 
@@ -672,7 +675,8 @@ async function cambiarMes(m){S.mes=m;S.unsub.forEach(f=>{try{f()}catch(e){}});S.
 async function cargarSup(){
   S.unsub.push(DB.listen('metas',[],docs=>{const d=docs.find(x=>x.id===S.mes);S.metas=d?d.cobs:null;if(['s-resumen','s-metas'].includes(tabActual))renderTab(tabActual);}));
   S.unsub.push(DB.listen('registros',[['mes','==',S.mes]],docs=>{S.regs=docs;if(['s-resumen','s-metas','s-registros'].includes(tabActual))renderTab(tabActual);}));
-  const [ls,rf,mo,es,eq]=await Promise.all([DB.list('listado'),DB.list('refis'),DB.list('mora'),DB.get('config/estado'),DB.list('equipo')]).catch(e=>{console.error(e);return [[],[],[],null,[]];});
+  const [ls,rf,mo,es,eq,lh,rh]=await Promise.all([DB.list('listado'),DB.list('refis'),DB.list('mora'),DB.get('config/estado'),DB.list('equipo'),DB.list('listadoresumen'),DB.list('refishist')]).catch(e=>{console.error(e);return [[],[],[],null,[],[],[]];});
+  S.lsHist=(lh||[]).sort((a,b)=>a.id.localeCompare(b.id));S.refisHist=(rh||[]).sort((a,b)=>a.id.localeCompare(b.id));
   S.listado={};ls.forEach(d=>S.listado[d.id]=d);
   S.refis={};rf.forEach(d=>S.refis[d.id]=d.items||[]);
   S.mora=mo.sort((a,b)=>a.id.localeCompare(b.id));
@@ -830,10 +834,15 @@ function renderRefis(){
   mkChart('chRefi',{data:{labels:dias.map(d=>dmy(d).slice(0,5)),datasets:[{type:'bar',label:'Monto',data:dias.map(d=>+porDia[d].m.toFixed(2)),backgroundColor:'#e8a317',borderRadius:5,yAxisID:'y'},{type:'line',label:'Cantidad',data:dias.map(d=>porDia[d].n),borderColor:'#0a1f44',backgroundColor:'#0a1f44',yAxisID:'y1',tension:.3}]},
     options:{maintainAspectRatio:false,plugins:{legend:{position:'bottom'}},scales:{y:{ticks:{callback:v=>'$'+fmt(v,0)}},y1:{position:'right',grid:{display:false},ticks:{precision:0}},x:{grid:{display:false}}}}});
   det.sort((x,y)=>y.fc.localeCompare(x.fc)||y.saldo-x.saldo);window._rfDet=det;
-  $('tbRefiDet').innerHTML='<thead><tr><th>Fecha crédito</th><th>Cobrador</th><th>Cliente</th><th>Cédula</th><th>Cod crédito</th><th>Cal. mensual</th><th>Tienda</th><th>Línea</th><th class="num">Saldo crédito final</th></tr></thead><tbody>'+
-    (det.length?det.map(x=>`<tr><td class="nowrap">${dmy(x.fc)}</td><td class="cobn nowrap">${esc(x.cob)}</td><td>${esc(x.nom)}</td><td>${esc(x.ced)}</td><td>${esc(x.cc)}</td><td>${calBadge(x.cal)}</td><td class="sm">${esc(x.tienda)}</td><td class="sm">${esc(x.linea)}</td><td class="num b">${m$(x.saldo)}</td></tr>`).join(''):'<tr><td colspan="9" class="center mut" style="padding:24px">Sin refinanciamientos en el rango</td></tr>')+'</tbody>';
+  const hs=(S.refisHist||[]).filter(h=>h.mes===S.mes);
+  $('tbRefiHist').innerHTML=hs.length?'<thead><tr><th>Cobrador</th>'+hs.map(h=>`<th class="num">${dmy(h.id).slice(0,5)}</th>`).join('')+'</tr></thead><tbody>'+
+    COBS.map(c=>`<tr><td class="cobn nowrap">${esc(c.corto)}</td>`+hs.map(h=>{const v=h.cobs[c.id]||{n:0,m:0};return `<td class="num">${v.n}<div class="xs mut">${m0(v.m)}</div></td>`;}).join('')+'</tr>').join('')+'</tbody>'+
+    '<tfoot><tr><td>Zona</td>'+hs.map(h=>{let n=0,m=0;Object.values(h.cobs).forEach(v=>{n+=v.n;m+=v.m;});return `<td class="num">${n}<div class="xs">${m0(m)}</div></td>`;}).join('')+'</tr></tfoot>'
+    :'<tbody><tr><td class="mut center" style="padding:18px">Aún no hay fotos de este mes. Se crean cada vez que guardas refinanciamientos.</td></tr></tbody>';
+  $('tbRefiDet').innerHTML='<thead><tr><th>Fecha crédito</th><th>Cobrador</th><th>Cliente</th><th>Cédula</th><th>Cod crédito</th><th>Cal. mensual</th><th>Tienda</th><th>Línea</th><th class="num">Saldo crédito final</th><th class="num">Saldo actual</th></tr></thead><tbody>'+
+    (det.length?det.map(x=>`<tr><td class="nowrap">${dmy(x.fc)}</td><td class="cobn nowrap">${esc(x.cob)}</td><td>${esc(x.nom)}</td><td>${esc(x.ced)}</td><td>${esc(x.cc)}</td><td>${calBadge(x.cal)}</td><td class="sm">${esc(x.tienda)}</td><td class="sm">${esc(x.linea)}</td><td class="num b">${m$(x.saldo)}</td><td class="num">${x.cancel?'<span class="badge r-Mejora">Cancelado</span>':m$(x.ult??x.saldo)}</td></tr>`).join(''):'<tr><td colspan="10" class="center mut" style="padding:24px">Sin refinanciamientos en el rango</td></tr>')+'</tbody>';
 }
-function exportRefis(){xlsxDownload((window._rfDet||[]).map(x=>({'Fecha Crédito':dmy(x.fc),Cobrador:x.cob,Cliente:x.nom,Cédula:x.ced,'Cod Crédito':x.cc,'Calificación Mensual':x.cal,Tienda:x.tienda,'Línea':x.linea,'Saldo Crédito Final':x.saldo})),`Refinanciamientos_${$('rfDesde').value}_${$('rfHasta').value}.xlsx`,'Refinanciamientos');}
+function exportRefis(){xlsxDownload((window._rfDet||[]).map(x=>({'Fecha Crédito':dmy(x.fc),Cobrador:x.cob,Cliente:x.nom,Cédula:x.ced,'Cod Crédito':x.cc,'Calificación Mensual':x.cal,Tienda:x.tienda,'Línea':x.linea,'Saldo Crédito Final':x.saldo,'Saldo actual':x.cancel?0:(x.ult??x.saldo),'Estado':x.cancel?'Cancelado':'Vigente'})),`Refinanciamientos_${$('rfDesde').value}_${$('rfHasta').value}.xlsx`,'Refinanciamientos');}
 
 /* =====================================================================
    SUPERVISOR · MORA PROYECTADA
@@ -890,7 +899,7 @@ let lsView='altos',lsPage=0,cView='altos',cPage=0;const PAGE=100;
 function qvHtml(cur,fn){return QVIEWS.map(([k,t,s])=>`<button class="${cur===k?'on':''}" onclick="${fn}('${k}')">${t}${s?`<small>${s}</small>`:''}</button>`).join('');}
 function setLsView(k){lsView=k;lsPage=0;renderListado();}
 function setCView(k){cView=k;cPage=0;renderCCartera();}
-function clientesDe(ids){const out=[];ids.forEach(id=>{const d=S.listado[id];if(d&&d.cl)d.cl.forEach(x=>out.push({...x,cob:id}));});return out;}
+function clientesDe(ids){const out=[];const src=(S.rol==='sup'&&S.lsFoto)?S.lsFoto:S.listado;ids.forEach(id=>{const d=src[id];if(d&&d.cl)d.cl.forEach(x=>out.push({...x,cob:id}));});return out;}
 function filtrarVista(arr,view){
   let r=arr;
   if(view==='siembra')r=r.filter(x=>x.nro>=1&&x.nro<=3).sort((a,b)=>a.nro-b.nro||b.sc-a.sc);
@@ -919,8 +928,20 @@ function pager(id,total,page,fn){const pages=Math.ceil(total/PAGE);if(pages<=1){
 function lsGo(p){lsPage=p;renderListado();}function cGo(p){cPage=p;renderCCartera();}
 function aplicaFiltros(arr,q,cal,rod,sie){q=(q||'').trim().toUpperCase();
   return arr.filter(x=>(!q||x.nom.toUpperCase().includes(q)||String(x.ced).includes(q))&&(!cal||x.cm===cal)&&(!rod||x.rod===rod)&&(!sie||(sie==='S'?(x.nro>=1&&x.nro<=3):x.nro===+sie)));}
+async function cambiarFoto(f){lsPage=0;if(!f){S.lsFoto=null;renderListado();return;}
+  $('lsSub').textContent='Cargando foto del '+dmy(f)+'…';const o={};
+  const docs=await Promise.all(COBS.map(c=>DB.get('listadohist/'+f+'__'+c.id).catch(()=>null)));
+  COBS.forEach((c,i)=>{if(docs[i])o[c.id]=docs[i];});S.lsFoto=o;S.lsFotoF=f;renderListado();}
+function renderLsHist(){const hs=S.lsHist||[];
+  $('tbLsHist').innerHTML=hs.length?'<thead><tr><th>Fecha</th><th class="num">Clientes</th><th class="num">Saldo crédito</th><th class="num">Cuota vencida</th><th class="num">Siembra 1·2·3</th><th class="num">Mejora</th><th class="num">Mantiene</th><th class="num">Deteriora</th><th></th></tr></thead><tbody>'+
+    [...hs].reverse().map(h=>{const t={n:0,sc:0,cv:0,s1:0,s2:0,s3:0,mej:0,man:0,det:0};const cob=$('lsCob').value;Object.entries(h.cobs).forEach(([k,v])=>{if(cob&&k!==cob)return;for(const x in t)t[x]+=v[x]||0;});
+      return `<tr><td class="b nowrap">${dmy(h.id)}</td><td class="num">${fmt(t.n,0)}</td><td class="num">${m0(t.sc)}</td><td class="num">${m0(t.cv)}</td><td class="num">${t.s1} · ${t.s2} · ${t.s3}</td><td class="num ok">${t.mej}</td><td class="num">${t.man}</td><td class="num bad">${t.det}</td><td><span class="lnk" style="cursor:pointer;color:var(--blue)" onclick="$('lsFoto').value='${h.id}';cambiarFoto('${h.id}')">Ver</span></td></tr>`;}).join('')+'</tbody>'
+    :'<tbody><tr><td class="mut center" style="padding:18px">Aún no hay fotos. Se crea una cada vez que publicas el listado.</td></tr></tbody>';}
 function renderListado(){
-  const meta=S.estado.listado;$('lsSub').textContent=meta?`Actualizado ${new Date(meta.ts).toLocaleString('es-EC')} · ${fmt(meta.clientes,0)} clientes · corte rodamiento ${dmy(meta.corte)}`:'Sube el Detalle por Clientes en "Cargar datos".';
+  {const sel=$('lsFoto'),v=sel.value;sel.innerHTML='<option value="">📅 Listado actual</option>'+[...(S.lsHist||[])].reverse().map(h=>`<option value="${h.id}">📷 Foto ${dmy(h.id)}</option>`).join('');sel.value=v;}
+  renderLsHist();
+  if(S.lsFoto){$('lsSub').textContent=`📷 Foto guardada del ${dmy(S.lsFotoF)} (no es el listado actual)`;}
+  const meta=S.estado.listado;if(!S.lsFoto)$('lsSub').textContent=meta?`Actualizado ${new Date(meta.ts).toLocaleString('es-EC')} · ${fmt(meta.clientes,0)} clientes · corte rodamiento ${dmy(meta.corte)}`:'Sube el Detalle por Clientes en "Cargar datos".';
   $('lsQv').innerHTML=qvHtml(lsView,'setLsView');
   const cob=$('lsCob').value;let arr=clientesDe(cob?[cob]:COBS.map(c=>c.id));
   arr=aplicaFiltros(arr,$('lsQ').value,$('lsCal').value,$('lsRod').value,$('lsSie').value);
@@ -985,7 +1006,7 @@ function pintarFiltrosLs(nombre){const g=(k,t,lbl)=>{const vals=LS_F[k];const by
   $('lsFiltros').innerHTML=`<div class="okbox">📄 ${esc(nombre)} · ${fmt(LS_RAW.length,0)} filas de crédito</div>`+
     `<details style="margin-top:8px"><summary class="sm b" style="cursor:pointer;color:var(--navy)">⚙️ Filtros (por defecto: 2026 de mayo a ${MESES[new Date().getMonth()]}, A–E1, sin "Origen Factura" ni vacías)</summary>`+
     g('fvi','📅 Fecha Vencimiento Inicial',ymLbl)+g('fvf','📅 Fecha Vencimiento Final',ymLbl)+g('cal','🏷️ Calificación Cliente Mensual')+g('ori','🧾 Origen Factura')+`</details>`+
-    `<label class="sm" style="display:flex;gap:6px;align-items:center;margin-top:10px"><input type="checkbox" id="lsTambienRefi" checked> Tomar también los refinanciamientos de este archivo (todas las fechas)</label>`;
+    `<div class="fld" style="margin-top:10px"><label>Fecha de la foto</label><input type="date" id="lsFecha" class="inp" value="${hoyYMD()}" max="${hoyYMD()}"></div><label class="sm" style="display:flex;gap:6px;align-items:center;margin-top:10px"><input type="checkbox" id="lsTambienRefi" checked> Tomar también los refinanciamientos de este archivo (todas las fechas)</label>`;
   $('lsFiltros').classList.remove('hidden');}
 function lsTog(k,el,v){const s=LS_F.sel[k];s.has(v)?s.delete(v):s.add(v);el.classList.toggle('on');procesarListado();}
 function lsAll(k){const s=LS_F.sel[k];if(s.size===LS_F[k].length)s.clear();else LS_F[k].forEach(v=>s.add(v));pintarFiltrosLs(document.querySelector('#lsFiltros .okbox')?.textContent.replace('📄 ','').split(' · ')[0]||'');procesarListado();}
@@ -1022,8 +1043,13 @@ async function publicarListado(b){if(!LS_OUT)return;if(b)b.disabled=true;
   try{const ts=Date.now();
     for(const c of COBS){await DB.set('listado/'+c.id,{cl:LS_OUT.porCob[c.id],ts,corte:LS_OUT.corte});}
     const est={listado:{ts,filas:LS_OUT.filas,clientes:LS_OUT.clientes,corte:LS_OUT.corte}};
+    const fecha=$('lsFecha')?.value||hoyYMD();const res={};
+    for(const c of COBS){const a=LS_OUT.porCob[c.id];await DB.set('listadohist/'+fecha+'__'+c.id,{cl:a,fecha,cob:c.id,ts,corte:LS_OUT.corte});
+      res[c.id]={n:a.length,sc:+a.reduce((t,x)=>t+x.sc,0).toFixed(2),cv:+a.reduce((t,x)=>t+x.cv,0).toFixed(2),s1:a.filter(x=>x.nro===1).length,s2:a.filter(x=>x.nro===2).length,s3:a.filter(x=>x.nro===3).length,
+        mej:a.filter(x=>x.rod==='Mejora').length,man:a.filter(x=>x.rod==='Mantiene').length,det:a.filter(x=>x.rod==='Deteriora').length};}
+    await DB.set('listadoresumen/'+fecha,{fecha,cobs:res,ts});{const i=S.lsHist.findIndex(h=>h.id===fecha);const d={id:fecha,fecha,cobs:res};i>=0?S.lsHist[i]=d:S.lsHist.push(d);S.lsHist.sort((a,b)=>a.id.localeCompare(b.id));}
     let extra='';
-    if($('lsTambienRefi')?.checked){const r=extraerRefis(LS_RAW);await guardarRefis(r,ts);est.refis={ts,n:r.n};extra=` y ${r.n} refinanciamientos`;}
+    if($('lsTambienRefi')?.checked){const r=extraerRefis(LS_RAW);await guardarRefis(r,ts,fecha);est.refis={ts,n:r.n};extra=` y ${r.n} refinanciamientos`;}
     await DB.set('config/estado',est,true);Object.assign(S.estado,est);
     COBS.forEach(c=>S.listado[c.id]={cl:LS_OUT.porCob[c.id],ts,corte:LS_OUT.corte});
     toast(`✅ Listado publicado${extra}`);$('lsRes').innerHTML+=`<div class="okbox">✅ Publicado ${new Date(ts).toLocaleString('es-EC')}. Cada cobrador ya ve su cartera.</div>`;renderEstado();
@@ -1036,7 +1062,19 @@ function extraerRefis(rows){const por={};const presentes=new Set();let n=0;
     (por[cob.id]=por[cob.id]||[]).push({cc:String(r['Cod Credito']||''),cod:String(r['Cod Cliente']||''),nom:String(r['Nombre Cliente']||'').trim(),ced:String(r['Nro Identificación']||''),
       fc:ymdUTC(fc),saldo:+num(r['Saldo Crédito Final']).toFixed(2),cal:normCalif(r['Calificación Cliente Mensual']),tienda:String(r['Tienda Factura']||'').trim(),linea:String(r['Línea Producto']||'').trim()});n++;});
   return {por,presentes,n};}
-async function guardarRefis(r,ts){for(const id of r.presentes){const items=r.por[id]||[];await DB.set('refis/'+id,{items,ts});S.refis[id]=items;}}
+async function guardarRefis(r,ts,fecha){fecha=fecha||hoyYMD();let nuevos=0,cancel=0;
+  for(const id of r.presentes){
+    const prev=new Map((S.refis[id]||[]).map(x=>[x.cc,x]));const vistos=new Set();
+    (r.por[id]||[]).forEach(x=>{vistos.add(x.cc);const o=prev.get(x.cc);
+      if(o){prev.set(x.cc,{...o,...x,saldo:Math.max(+o.saldo||0,x.saldo),ult:x.saldo,cancel:false,visto:fecha});}
+      else{prev.set(x.cc,{...x,ult:x.saldo,cancel:false,alta:fecha,visto:fecha});nuevos++;}});
+    prev.forEach((o,cc)=>{if(!vistos.has(cc)&&!o.cancel){prev.set(cc,{...o,cancel:true,ult:0,cancelFecha:fecha});cancel++;}});
+    const items=[...prev.values()];await DB.set('refis/'+id,{items,ts});S.refis[id]=items;}
+  // foto diaria de refinanciamientos del mes
+  const mes=fecha.slice(0,7),[d1,d2]=rangoMes(mes),cobs={};
+  COBS.forEach(c=>{const it=(S.refis[c.id]||[]).filter(x=>x.fc>=d1&&x.fc<=d2);cobs[c.id]={n:it.length,m:+it.reduce((a,x)=>a+(+x.saldo||0),0).toFixed(2)};});
+  await DB.set('refishist/'+fecha,{fecha,mes,cobs,ts});const i=S.refisHist.findIndex(h=>h.id===fecha);const d={id:fecha,fecha,mes,cobs};i>=0?S.refisHist[i]=d:S.refisHist.push(d);S.refisHist.sort((a,b)=>a.id.localeCompare(b.id));
+  return {nuevos,cancel};}
 let RF_TMP=null;
 async function leerRefis(file){if(!file)return;$('rfRes').innerHTML='<div class="info">Leyendo archivo…</div>';
   try{const aoa=await leerXlsx(file);const t=tablaDesde(aoa,'Cod Cliente');if(!t)throw new Error('No encuentro la columna "Cod Cliente".');
@@ -1044,10 +1082,10 @@ async function leerRefis(file){if(!file)return;$('rfRes').innerHTML='<div class=
     const lst=[...RF_TMP.presentes].map(id=>{const it=RF_TMP.por[id]||[];const mm=it.filter(x=>x.fc>=d1&&x.fc<=d2);return `<tr><td class="cobn">${esc(COB_BY_ID[id].corto)}</td><td class="num">${mm.length}</td><td class="num">${m$(mm.reduce((s,x)=>s+x.saldo,0))}</td></tr>`;}).join('');
     $('rfRes').innerHTML=`<div class="okbox">📄 ${esc(file.name)} · ${RF_TMP.presentes.size} cobrador(es) · se cuentan solo los de Fecha Crédito en ${mesNombre(S.mes)}</div>`+
       `<div class="tw" style="margin-top:8px;max-height:260px"><table><thead><tr><th>Cobrador</th><th class="num">Refis ${MESES[+S.mes.slice(5)-1]}</th><th class="num">Saldo Crédito Final</th></tr></thead><tbody>${lst||'<tr><td colspan="3" class="mut center">Ningún cobrador del equipo en el archivo</td></tr>'}</tbody></table></div>`+
-      (RF_TMP.presentes.size?`<button class="btn gold block" style="margin-top:10px" onclick="publicarRefis(this)">🚀 Publicar refinanciamientos</button>`:'');
+      (RF_TMP.presentes.size?`<div class="fld" style="margin-top:10px"><label>Fecha de la foto</label><input type="date" id="rfFechaCarga" class="inp" value="${hoyYMD()}" max="${hoyYMD()}"></div><div class="xs mut">Se acumulan: los refinanciamientos que ya estaban guardados no se borran aunque el crédito se cancele.</div><button class="btn gold block" style="margin-top:10px" onclick="publicarRefis(this)">🚀 Guardar refinanciamientos</button>`:'');
   }catch(e){console.error(e);$('rfRes').innerHTML=`<div class="info" style="background:#fee2e2;border-color:#fecaca;color:#7f1d1d">${esc(e.message)}</div>`;}}
-async function publicarRefis(b){b.disabled=true;try{const ts=Date.now();await guardarRefis(RF_TMP,ts);const est={refis:{ts,n:RF_TMP.n}};await DB.set('config/estado',est,true);Object.assign(S.estado,est);
-  toast('✅ Refinanciamientos publicados');$('rfRes').innerHTML+='<div class="okbox">✅ Publicado. Se reemplazaron solo los cobradores del archivo.</div>';renderEstado();}catch(e){console.error(e);toast('No se pudo publicar');b.disabled=false;}}
+async function publicarRefis(b){b.disabled=true;try{const ts=Date.now();const rr=await guardarRefis(RF_TMP,ts,$('rfFechaCarga')?.value||hoyYMD());const est={refis:{ts,n:RF_TMP.n}};await DB.set('config/estado',est,true);Object.assign(S.estado,est);
+  toast('✅ Refinanciamientos publicados');$('rfRes').innerHTML+=`<div class="okbox">✅ Guardado. ${rr.nuevos} refinanciamiento(s) nuevo(s)${rr.cancel?` · ${rr.cancel} ya no vienen en el archivo (cancelados) y se mantienen guardados`:''}.</div>`;renderEstado();}catch(e){console.error(e);toast('No se pudo publicar');b.disabled=false;}}
 
 /* ---- 3. Mora proyectada ---- */
 let MO_TMP=null;
