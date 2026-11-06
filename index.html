@@ -278,6 +278,11 @@ canvas{max-width:100%}
     <input type="hidden" id="rfDesde"><input type="hidden" id="rfHasta">
     <div class="grid g4" id="rfKpis"></div>
   </div>
+  <div class="card" style="margin-top:14px">
+    <div class="ch"><div><h3>Refinanciamientos de la semana</h3><div class="sub" id="rfSemSub">Semanas de 7 días desde el día 1 · meta semanal = meta mensual ÷ días del mes × días de la semana</div></div>
+      <div class="chips" id="rfSemChips"></div></div>
+    <div class="tw"><table id="tbRefiSem"></table></div>
+  </div>
   <div class="grid g2" style="margin-top:14px">
     <div class="card"><h3>Refinanciamientos por cobrador</h3><div class="sub">Cantidad y monto frente a la meta mensual de refinanciamiento</div><div class="tw"><table id="tbRefi"></table></div></div>
     <div class="card"><h3>Refinanciamientos por día</h3><div class="sub">Según Fecha Crédito del mes</div><div class="chartbox"><canvas id="chRefi"></canvas></div></div>
@@ -356,7 +361,7 @@ canvas{max-width:100%}
       <div id="lsRes"></div>
     </div>
     <div class="card">
-      <h3>2 · Refinanciamientos</h3><div class="sub">Detalle por Clientes con todas las fechas de vencimiento. Se toma solo Origen Factura = <b>Por Refinanciamiento trx-393</b> y se cuentan los de <b>Fecha Crédito del mes en curso</b>, con su Saldo Crédito Final, por cobrador. Se acumulan: lo ya guardado no se borra.</div>
+      <h3>2 · Refinanciamientos</h3><div class="sub">Detalle por Clientes con todas las fechas de vencimiento. Primero se filtra <b>Fecha Crédito del mes en curso</b> (del 1 a hoy) y luego Origen Factura = <b>Por Refinanciamiento trx-393</b>; solo esos se guardan, con su Saldo Crédito Final, por cobrador. Se acumulan: lo ya guardado no se borra.</div>
       <div class="drop" id="dpRf" onclick="pick('fRf')"><div class="big">🔁</div><b>Arrastra o toca para subir</b><div class="sm mut">Detalle_por_Clientes.xlsx</div></div>
       <input type="file" id="fRf" accept=".xlsx,.xls,.csv" class="hidden" onchange="leerRefis(this.files[0])">
       <div id="rfRes"></div>
@@ -834,6 +839,7 @@ function renderRefis(){
   mkChart('chRefi',{data:{labels:dias.map(d=>dmy(d).slice(0,5)),datasets:[{type:'bar',label:'Monto',data:dias.map(d=>+porDia[d].m.toFixed(2)),backgroundColor:'#e8a317',borderRadius:5,yAxisID:'y'},{type:'line',label:'Cantidad',data:dias.map(d=>porDia[d].n),borderColor:'#0a1f44',backgroundColor:'#0a1f44',yAxisID:'y1',tension:.3}]},
     options:{maintainAspectRatio:false,plugins:{legend:{position:'bottom'}},scales:{y:{ticks:{callback:v=>'$'+fmt(v,0)}},y1:{position:'right',grid:{display:false},ticks:{precision:0}},x:{grid:{display:false}}}}});
   det.sort((x,y)=>y.fc.localeCompare(x.fc)||y.saldo-x.saldo);window._rfDet=det;
+  renderRefiSem();
   const hs=(S.refisHist||[]).filter(h=>h.mes===S.mes);
   $('tbRefiHist').innerHTML=hs.length?'<thead><tr><th>Cobrador</th>'+hs.map(h=>`<th class="num">${dmy(h.id).slice(0,5)}</th>`).join('')+'</tr></thead><tbody>'+
     COBS.map(c=>`<tr><td class="cobn nowrap">${esc(c.corto)}</td>`+hs.map(h=>{const v=h.cobs[c.id]||{n:0,m:0};return `<td class="num">${v.n}<div class="xs mut">${m0(v.m)}</div></td>`;}).join('')+'</tr>').join('')+'</tbody>'+
@@ -841,6 +847,22 @@ function renderRefis(){
     :'<tbody><tr><td class="mut center" style="padding:18px">Aún no hay fotos de este mes. Se crean cada vez que guardas refinanciamientos.</td></tr></tbody>';
   $('tbRefiDet').innerHTML='<thead><tr><th>Fecha crédito</th><th>Cobrador</th><th>Cliente</th><th>Cédula</th><th>Cod crédito</th><th>Cal. mensual</th><th>Tienda</th><th>Línea</th><th class="num">Saldo crédito final</th><th class="num">Saldo actual</th></tr></thead><tbody>'+
     (det.length?det.map(x=>`<tr><td class="nowrap">${dmy(x.fc)}</td><td class="cobn nowrap">${esc(x.cob)}</td><td>${esc(x.nom)}</td><td>${esc(x.ced)}</td><td>${esc(x.cc)}</td><td>${calBadge(x.cal)}</td><td class="sm">${esc(x.tienda)}</td><td class="sm">${esc(x.linea)}</td><td class="num b">${m$(x.saldo)}</td><td class="num">${x.cancel?'<span class="badge r-Mejora">Cancelado</span>':m$(x.ult??x.saldo)}</td></tr>`).join(''):'<tr><td colspan="10" class="center mut" style="padding:24px">Sin refinanciamientos en el rango</td></tr>')+'</tbody>';
+}
+let rfSem=null;
+function setRfSem(i){rfSem=i;renderRefiSem();}
+function renderRefiSem(){
+  const mes=S.mes,dm=diasMes(mes),sems=semanasMes(mes),h=hoyYMD();
+  const actual=h.slice(0,7)===mes?semIdx(h):sems.length-1;if(rfSem==null||rfSem>=sems.length)rfSem=Math.min(actual,sems.length-1);
+  $('rfSemChips').innerHTML=sems.map(w=>`<span class="chip ${w.i===rfSem?'gold on':''}" onclick="setRfSem(${w.i})">Sem ${w.i+1} · ${w.a}–${w.b}${w.i===actual&&h.slice(0,7)===mes?' (actual)':''}</span>`).join('');
+  const w=sems[rfSem],a=`${mes}-${pad(w.a)}`,bFin=`${mes}-${pad(w.b)}`,b=(h.slice(0,7)===mes&&h<bFin)?h:bFin;
+  const enCurso=h>=a&&h<=bFin;const transc=enCurso?(Number(h.slice(8,10))-w.a+1):w.dias;const ritmo=transc/w.dias;
+  $('rfSemSub').innerHTML=`Semana ${rfSem+1}: <b>${dmy(a)} al ${dmy(bFin)}</b> (${w.dias} días)${enCurso?` · día ${transc} de ${w.dias} · ritmo esperado ${pctTxt(ritmo,0)}`:''} · meta semanal = meta mensual ÷ ${dm} días × ${w.dias}`;
+  let tN=0,tM=0,tMeta=0;
+  const rows=COBS.map(c=>{const it=refisDe(c.id,a,b);const m=it.reduce((t,x)=>t+(+x.saldo||0),0);const mt=metaDe(c.id).fm*w.dias/dm;tN+=it.length;tM+=m;tMeta+=mt;return {c,n:it.length,m,mt,p:mt?m/mt:0};}).sort((x,y)=>y.p-x.p||y.m-x.m);
+  const cls=p=>enCurso?pcCls(p,ritmo):(p>=1?'ok':p>=.8?'warn':'bad');
+  $('tbRefiSem').innerHTML='<thead><tr><th>Cobrador</th><th class="num">Cant.</th><th class="num">Monto</th><th class="num">Meta semanal</th><th class="num">Falta</th><th class="num">%</th><th style="width:26%"></th></tr></thead><tbody>'+
+    rows.map(r=>`<tr><td class="cobn nowrap">${esc(r.c.corto)}</td><td class="num">${r.n}</td><td class="num">${m$(r.m)}</td><td class="num mut">${m0(r.mt)}</td><td class="num">${r.m>=r.mt?'<span class="ok b">✔ Cumplida</span>':m0(r.mt-r.m)}</td><td class="num"><span class="pc ${cls(r.p)}">${pctTxt(r.p,0)}</span></td><td><div class="bar ${r.p>=1?'ok':'g'}" style="margin:0"><i style="width:${Math.min(100,r.p*100)}%"></i></div></td></tr>`).join('')+
+    `</tbody><tfoot><tr><td>Zona</td><td class="num">${tN}</td><td class="num">${m$(tM)}</td><td class="num">${m0(tMeta)}</td><td class="num">${m0(Math.max(0,tMeta-tM))}</td><td class="num">${pctTxt(tMeta?tM/tMeta:0,0)}</td><td></td></tr></tfoot>`;
 }
 function exportRefis(){xlsxDownload((window._rfDet||[]).map(x=>({'Fecha Crédito':dmy(x.fc),Cobrador:x.cob,Cliente:x.nom,Cédula:x.ced,'Cod Crédito':x.cc,'Calificación Mensual':x.cal,Tienda:x.tienda,'Línea':x.linea,'Saldo Crédito Final':x.saldo,'Saldo actual':x.cancel?0:(x.ult??x.saldo),'Estado':x.cancel?'Cancelado':'Vigente'})),`Refinanciamientos_${$('rfDesde').value}_${$('rfHasta').value}.xlsx`,'Refinanciamientos');}
 
@@ -1058,9 +1080,11 @@ async function publicarListado(b){if(!LS_OUT)return;if(b)b.disabled=true;
   }catch(e){console.error(e);toast('No se pudo publicar: '+e.message);if(b)b.disabled=false;}}
 
 /* ---- 2. Refinanciamientos ---- */
-function extraerRefis(rows){const por={};const presentes=new Set();let n=0;
+function extraerRefis(rows){const por={};const presentes=new Set();let n=0;const mesAct=hoyYMD().slice(0,7),hoyS=hoyYMD();
   rows.forEach(r=>{const cob=cobDe(r['Nombre Cobrador Actual']);if(!cob)return;presentes.add(cob.id);
-    if(!/refinanc/i.test(String(r['Origen Factura']||'')))return;const fc=parseDate(r['Fecha Credito']);
+    const fc=parseDate(r['Fecha Credito']??r['Fecha Crédito']);const fcs=ymdUTC(fc);
+    if(!fcs||fcs.slice(0,7)!==mesAct||fcs>hoyS)return; // 1) Fecha Crédito del mes en curso
+    if(!/trx-393|refinanc/i.test(String(r['Origen Factura']||'')))return; // 2) Por Refinanciamiento trx-393
     (por[cob.id]=por[cob.id]||[]).push({cc:String(r['Cod Credito']||''),cod:String(r['Cod Cliente']||''),nom:String(r['Nombre Cliente']||'').trim(),ced:String(r['Nro Identificación']||''),
       fc:ymdUTC(fc),saldo:+num(r['Saldo Crédito Final']).toFixed(2),cal:normCalif(r['Calificación Cliente Mensual']),tienda:String(r['Tienda Factura']||'').trim(),linea:String(r['Línea Producto']||'').trim()});n++;});
   return {por,presentes,n};}
@@ -1070,7 +1094,7 @@ async function guardarRefis(r,ts,fecha){fecha=fecha||hoyYMD();let nuevos=0,cance
     (r.por[id]||[]).forEach(x=>{vistos.add(x.cc);const o=prev.get(x.cc);
       if(o){prev.set(x.cc,{...o,...x,saldo:Math.max(+o.saldo||0,x.saldo),ult:x.saldo,cancel:false,visto:fecha});}
       else{prev.set(x.cc,{...x,ult:x.saldo,cancel:false,alta:fecha,visto:fecha});nuevos++;}});
-    prev.forEach((o,cc)=>{if(!vistos.has(cc)&&!o.cancel){prev.set(cc,{...o,cancel:true,ult:0,cancelFecha:fecha});cancel++;}});
+    const mesAct=hoyYMD().slice(0,7);prev.forEach((o,cc)=>{if(!vistos.has(cc)&&!o.cancel&&(o.fc||'').slice(0,7)===mesAct){prev.set(cc,{...o,cancel:true,ult:0,cancelFecha:fecha});cancel++;}});
     const items=[...prev.values()];await DB.set('refis/'+id,{items,ts});S.refis[id]=items;}
   // foto diaria de refinanciamientos del mes
   const mes=fecha.slice(0,7),[d1,d2]=rangoMes(mes),cobs={};
@@ -1111,7 +1135,7 @@ async function publicarMora(b){const f=$('moFechaCarga').value;if(!f)return toas
     toast('✅ Corte '+dmy(f)+' guardado');$('moRes').innerHTML+=`<div class="okbox">✅ Corte ${dmy(f)} guardado. Ya son ${S.mora.length} corte(s).</div>`;renderEstado();
   }catch(e){console.error(e);toast('No se pudo guardar');b.disabled=false;}}
 function renderEstado(){const e=S.estado||{};const l=x=>x?new Date(x).toLocaleString('es-EC'):'—';
-  $('estadoCargas').innerHTML=`<div class="sumrow" style="margin:0"><div class="s">📋 Listado<b>${e.listado?fmt(e.listado.clientes,0)+' clientes':'—'}</b>${l(e.listado?.ts)}</div><div class="s">🔁 Refinanciamientos de ${MESES[+S.mes.slice(5)-1]}<b>${(()=>{const [d1,d2]=rangoMes(S.mes);let n=0,m=0;COBS.forEach(c=>refisDe(c.id,d1,d2).forEach(x=>{n++;m+=+x.saldo||0;}));return n+' créditos · '+m0(m);})()}</b>${l(e.refis?.ts)}<div class="xs mut">${COBS.reduce((t,c)=>t+(S.refis[c.id]||[]).length,0)} refinanciamientos guardados de todas las fechas</div></div><div class="s">📈 Mora proyectada<b>${S.mora.length} corte(s)</b>${S.mora.length?'último '+dmy(S.mora[S.mora.length-1].id):'—'}</div></div>`;}
+  $('estadoCargas').innerHTML=`<div class="sumrow" style="margin:0"><div class="s">📋 Listado<b>${e.listado?fmt(e.listado.clientes,0)+' clientes':'—'}</b>${l(e.listado?.ts)}</div><div class="s">🔁 Refinanciamientos de ${MESES[+S.mes.slice(5)-1]}<b>${(()=>{const [d1,d2]=rangoMes(S.mes);let n=0,m=0;COBS.forEach(c=>refisDe(c.id,d1,d2).forEach(x=>{n++;m+=+x.saldo||0;}));return n+' créditos · '+m0(m);})()}</b>${l(e.refis?.ts)}</div><div class="s">📈 Mora proyectada<b>${S.mora.length} corte(s)</b>${S.mora.length?'último '+dmy(S.mora[S.mora.length-1].id):'—'}</div></div>`;}
 
 /* =====================================================================
    SUPERVISOR · EQUIPO (accesos)
