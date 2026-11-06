@@ -356,7 +356,7 @@ canvas{max-width:100%}
       <div id="lsRes"></div>
     </div>
     <div class="card">
-      <h3>2 · Refinanciamientos</h3><div class="sub">Detalle por Clientes con todas las fechas de vencimiento. Se toma solo Origen Factura = Refinanciamiento. Si el archivo trae solo algunos cobradores, se reemplazan únicamente esos.</div>
+      <h3>2 · Refinanciamientos</h3><div class="sub">Detalle por Clientes con todas las fechas de vencimiento. Se toma solo Origen Factura = <b>Por Refinanciamiento trx-393</b> y se cuentan los de <b>Fecha Crédito del mes en curso</b>, con su Saldo Crédito Final, por cobrador. Se acumulan: lo ya guardado no se borra.</div>
       <div class="drop" id="dpRf" onclick="pick('fRf')"><div class="big">🔁</div><b>Arrastra o toca para subir</b><div class="sm mut">Detalle_por_Clientes.xlsx</div></div>
       <input type="file" id="fRf" accept=".xlsx,.xls,.csv" class="hidden" onchange="leerRefis(this.files[0])">
       <div id="rfRes"></div>
