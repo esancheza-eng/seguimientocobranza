@@ -947,11 +947,11 @@ function renderRegs(){
   $('rgSum').innerHTML=`<div class="s">Registros<b>${arr.length}</b></div><div class="s">Retiros<b>${m$(sr)}</b></div><div class="s">Refinanciamiento<b>${m$(sf)}</b></div>`;
   $('tbRegs').innerHTML='<thead><tr><th>Fecha</th><th>Hora registro</th><th>Cobrador</th><th>Tipo</th><th>Cliente</th><th>Nota</th><th class="num">Monto</th><th></th></tr></thead><tbody>'+
     (arr.length?arr.map(r=>`<tr><td class="nowrap">${dmy(r.dia)}</td><td class="sm mut nowrap">${r.ts?new Date(tsMs(r.ts)).toLocaleString('es-EC'):'enviando…'}</td><td class="cobn nowrap">${esc(COB_BY_ID[r.cob]?.corto||r.cob)}</td>
-      <td><span class="badge ${r.tipo==='refi'?'t-refi':'t-retiro'}">${r.tipo==='refi'?'Refinanciamiento':'Retiro'}</span></td><td>${esc(r.cliente?.nom||'—')}<div class="xs mut">${esc(r.cliente?.ced||'')}</div></td><td class="sm">${esc(r.nota||'')}</td>
+      <td><span class="badge ${r.tipo==='refi'?'t-refi':'t-retiro'}">${r.tipo==='refi'?'Refinanciamiento':'Retiro'}</span></td><td>${esc(r.cliente?.nom||'—')}<div class="xs mut">${esc(r.cliente?.ced||'')}</div>${r.cliente?.cm?`<div style="margin-top:2px">${calBadge(r.cliente.cm)} → ${calBadge(r.cliente.cr)} ${rodBadge(r.cliente.rod)}</div>`:''}${(r.cliente?.creditos||[]).length?`<div class="xs">${r.cliente.creditos.map(c=>`Créd. ${esc(c.cc)}: ${m$(c.s)}`).join(' · ')}</div>`:''}</td><td class="sm">${esc(r.nota||'')}</td>
       <td class="num b">${m$(r.monto)}</td><td><button class="btn ghost sm" onclick="borrarReg('${r.id}')">🗑</button></td></tr>`).join(''):'<tr><td colspan="8" class="center mut" style="padding:28px">Sin registros</td></tr>')+'</tbody>';
 }
 async function borrarReg(id){if(!confirm('¿Borrar este registro?'))return;try{await DB.del('registros/'+id);toast('Registro borrado');}catch(e){toast('No se pudo borrar (solo durante 24 h)');}}
-function exportRegs(){xlsxDownload((window._rgArr||[]).map(r=>({Fecha:dmy(r.dia),'Hora registro':r.ts?new Date(tsMs(r.ts)).toLocaleString('es-EC'):'',Cobrador:COB_BY_ID[r.cob]?.corto||r.cob,Tipo:r.tipo==='refi'?'Refinanciamiento':'Retiro',Cliente:r.cliente?.nom||'','Cédula':r.cliente?.ced||'',Nota:r.nota||'',Monto:r.monto})),`Registros_${S.mes}.xlsx`,'Registros');}
+function exportRegs(){xlsxDownload((window._rgArr||[]).map(r=>({Fecha:dmy(r.dia),'Hora registro':r.ts?new Date(tsMs(r.ts)).toLocaleString('es-EC'):'',Cobrador:COB_BY_ID[r.cob]?.corto||r.cob,Tipo:r.tipo==='refi'?'Refinanciamiento':'Retiro',Cliente:r.cliente?.nom||'','Cédula':r.cliente?.ced||'','Cal. mensual':r.cliente?.cm||'','Cal. rodamiento':r.cliente?.cr||'','Categoría rodamiento':r.cliente?.rod||'','Créditos':(r.cliente?.creditos||[]).map(c=>c.cc+' ($'+c.s+')').join(', '),Nota:r.nota||'',Monto:r.monto})),`Registros_${S.mes}.xlsx`,'Registros');}
 
 /* =====================================================================
    CARGA DE ARCHIVOS
@@ -1009,8 +1009,10 @@ function procesarListado(){
     c.rows.forEach(r=>{if(r._fvf&&c.minF&&r._fvf<=c.minF){cv+=num(r['Saldo Cuota']);const n=Math.round(num(r['Nro Vencimiento Final']));if(n>0&&(nro==null||n<nro))nro=n;}
       sc+=num(r['Saldo Crédito Final']);vc+=num(r['Valor Cuota']);if(/refinanc/i.test(String(r['Origen Factura']||'')))ref=true;});
     const dias=c.minF?Math.floor((corte-c.minF.getTime())/86400000):'';const cr=califReal(dias);
+    const oriC=o=>/refinanc/i.test(o)?'Refinanc.':/seguro/i.test(o)?'Seguro':/factur/i.test(o)?'Facturación':(o||'');
+    const creds=c.rows.map(r=>({cc:String(r['Cod Credito']??'').trim(),s:+num(r['Saldo Crédito Final']).toFixed(2),o:oriC(String(r['Origen Factura']||'')),n:Math.round(num(r['Nro Vencimiento Final']))||0,f:ymdUTC(r._fvf),l:String(r['Línea Producto']||'').trim()})).sort((a,b)=>b.s-a.s);
     porCob[c.cob].push({cod:c.cod,nom:c.nom,ced:c.ced,tel:c.tel,dir:c.dir,zona:c.zona,cm:c.cm,cd:c.cd,dias,cr,fvi:ymdUTC(c.minI),fvf:ymdUTC(c.minF),
-      cv:+cv.toFixed(2),sc:+sc.toFixed(2),vc:+vc.toFixed(2),nro:nro||0,rod:catRod(c.cm,cr),nc:c.rows.length,ref});});
+      cv:+cv.toFixed(2),sc:+sc.toFixed(2),vc:+vc.toFixed(2),nro:nro||0,rod:catRod(c.cm,cr),nc:c.rows.length,ref,creds});});
   LS_OUT={porCob,filas,clientes:Object.keys(cl).length,corte:ymdUTC(new Date(corte))};
   const sie=Object.values(porCob).flat().filter(x=>x.nro>=1&&x.nro<=3).length;
   $('lsRes').innerHTML=`<div class="info"><b>${fmt(filas,0)}</b> filas después de filtros → <b>${fmt(LS_OUT.clientes,0)}</b> clientes de ${COBS.length-faltan.size} cobradores · siembra 1-2-3: <b>${sie}</b>`+
@@ -1119,26 +1121,46 @@ function renderCInicio(){
     <div class="mini" style="margin-top:12px"><span>Clientes en tu listado</span><b>${cl.length}</b></div><div class="mini"><span>Cartera siembra 1-2-3</span><b>${sie}</b></div>
     <button class="btn ghost sm" style="margin-top:10px" onclick="cView='siembra';goTab('c-cartera')">🌱 Ver mi siembra</button>`;
   const regs=[...S.regs].sort((a,b)=>tsMs(b.ts)-tsMs(a.ts));const now=Date.now();
-  $('cRegs').innerHTML=regs.length?regs.map(r=>{const can=!r.ts||now-tsMs(r.ts)<86400000;return `<div class="reg-it"><div><span class="badge ${r.tipo==='refi'?'t-refi':'t-retiro'}">${r.tipo==='refi'?'Refinanciamiento':'Retiro'}</span> <b>${m$(r.monto)}</b><div class="xs mut">${dmy(r.dia)} · ${esc(r.cliente?.nom||'sin cliente')}${r.nota?' · '+esc(r.nota):''}</div></div>${can?`<button class="btn ghost sm" onclick="borrarReg('${r.id}')">🗑</button>`:''}</div>`;}).join(''):'<div class="mut center" style="padding:16px">Aún no registras nada este mes. Toca ➕ Registrar.</div>';
+  $('cRegs').innerHTML=regs.length?regs.map(r=>{const can=!r.ts||now-tsMs(r.ts)<86400000;return `<div class="reg-it"><div><span class="badge ${r.tipo==='refi'?'t-refi':'t-retiro'}">${r.tipo==='refi'?'Refinanciamiento':'Retiro'}</span> <b>${m$(r.monto)}</b><div class="xs mut">${dmy(r.dia)} · ${esc(r.cliente?.nom||'sin cliente')}${(r.cliente?.creditos||[]).length?' · créd. '+r.cliente.creditos.map(c=>esc(c.cc)).join(', '):''}${r.nota?' · '+esc(r.nota):''}</div></div>${can?`<button class="btn ghost sm" onclick="borrarReg('${r.id}')">🗑</button>`:''}</div>`;}).join(''):'<div class="mut center" style="padding:16px">Aún no registras nada este mes. Toca ➕ Registrar.</div>';
 }
 let tipoReg='retiro',cliSel=null;
 function setTipo(t){tipoReg=t;$('tpR').classList.toggle('on',t==='retiro');$('tpF').classList.toggle('on',t==='refi');}
+function calInfo(x){return `<span class="xs mut">Mensual</span> ${calBadge(x.cm)} <span class="xs mut">Rodamiento</span> ${calBadge(x.cr)} ${rodBadge(x.rod)} ${sieBadge(x.nro)}`;}
 function buscarCli(){const q=$('rgCliQ').value.trim().toUpperCase();
   const cl=(S.listado[S.cob]?.cl)||[];
   if(!cl.length){$('rgCliRes').innerHTML='<div class="xs mut" style="margin-top:6px">Tu supervisor aún no publica tu listado de clientes.</div>';return;}
   const r=cl.filter(x=>!q||x.nom.toUpperCase().includes(q)||String(x.ced).includes(q)).sort((a,b)=>b.sc-a.sc);
-  $('rgCliRes').innerHTML=r.length?`<div class="xs mut" style="margin:6px 0 2px">${q?r.length+' coincidencia(s)':'Tus '+cl.length+' clientes · toca uno o escribe para filtrar'}</div><div class="cli-res">${r.slice(0,60).map(x=>`<div onclick="elegirCli('${esc(x.cod)}')"><b>${esc(x.nom)}</b> ${calBadge(x.cm)} ${sieBadge(x.nro)}<div class="xs mut">${esc(x.ced)} · saldo ${m$(x.sc)} · vencido ${m$(x.cv)}</div></div>`).join('')}</div>`
+  $('rgCliRes').innerHTML=r.length?`<div class="xs mut" style="margin:6px 0 2px">${q?r.length+' coincidencia(s)':'Tus '+cl.length+' clientes · toca uno o escribe para filtrar'}</div><div class="cli-res">${r.slice(0,60).map(x=>`<div onclick="elegirCli('${esc(x.cod)}')"><b>${esc(x.nom)}</b><div style="margin:3px 0">${calInfo(x)}</div><div class="xs mut">${esc(x.ced)} · ${x.nc} crédito(s) · saldo ${m$(x.sc)} · vencido ${m$(x.cv)}</div></div>`).join('')}</div>`
     :'<div class="xs mut" style="margin-top:6px">⚠️ Ese cliente no está en tu cartera (puede ser de otro cobrador). Puedes guardar sin cliente y anotarlo en la nota.</div>';}
-function elegirCli(cod){const x=((S.listado[S.cob]?.cl)||[]).find(y=>y.cod===cod);if(!x)return;cliSel={cod:x.cod,nom:x.nom,ced:x.ced,cm:x.cm};
-  $('rgCliRes').innerHTML='';$('rgCliQ').value='';$('rgCliSel').innerHTML=`<div class="cli-sel">👤 <b>${esc(x.nom)}</b> ${calBadge(x.cm)} <span class="lnk" style="float:right;cursor:pointer;color:var(--bad)" onclick="cliSel=null;$('rgCliSel').innerHTML=''">✕</span><div class="xs mut">${esc(x.ced)} · saldo crédito ${m$(x.sc)} · cuota vencida ${m$(x.cv)} · ${x.dias} días</div></div>`;}
+function elegirCli(cod){const x=((S.listado[S.cob]?.cl)||[]).find(y=>y.cod===cod);if(!x)return;
+  const creds=x.creds||[];
+  cliSel={cod:x.cod,nom:x.nom,ced:x.ced,cm:x.cm,cr:x.cr,rod:x.rod,creds,sel:new Set(creds.length===1?[0]:[])};
+  $('rgCliRes').innerHTML='';$('rgCliQ').value='';
+  $('rgCliSel').innerHTML=`<div class="cli-sel"><div style="display:flex;justify-content:space-between;gap:8px"><b>👤 ${esc(x.nom)}</b><span style="cursor:pointer;color:var(--bad);font-weight:700" onclick="quitarCli()">✕</span></div>
+    <div class="xs mut">${esc(x.ced)} · ${x.dias} días · venc. más antiguo ${dmy(x.fvf)}</div>
+    <div style="margin:6px 0">${calInfo(x)}</div>
+    ${creds.length?`<div class="sm b" style="margin-top:8px;color:var(--navy)">Selecciona el/los crédito(s) <span class="xs mut">(puedes marcar varios)</span></div>
+    <div id="credList" style="margin-top:4px">${creds.map((c,i)=>`<label style="display:flex;align-items:center;gap:10px;padding:9px 6px;border-bottom:1px solid #e4e9f2;cursor:pointer">
+      <input type="checkbox" style="width:20px;height:20px" ${cliSel.sel.has(i)?'checked':''} onchange="togCred(${i},this.checked)">
+      <div style="flex:1;min-width:0"><b>Crédito ${esc(c.cc)}</b><div class="xs mut">${esc(c.o)}${c.l?' · '+esc(c.l):''} · cuota ${c.n||'—'} · venc. ${dmy(c.f)}</div></div>
+      <b class="nowrap">${m$(c.s)}</b></label>`).join('')}</div>
+    <div class="mini" style="margin-top:6px"><span>Seleccionados: <b id="credN">0</b></span><span>Total Saldo Crédito Final: <b id="credT">$0,00</b></span></div>`:''}
+  </div>`;
+  actCred();}
+function quitarCli(){cliSel=null;$('rgCliSel').innerHTML='';}
+function togCred(i,on){if(!cliSel)return;on?cliSel.sel.add(i):cliSel.sel.delete(i);actCred();}
+function actCred(){if(!cliSel||!$('credN'))return;const t=[...cliSel.sel].reduce((a,i)=>a+cliSel.creds[i].s,0);
+  $('credN').textContent=cliSel.sel.size;$('credT').textContent=m$(t);if(cliSel.sel.size)$('rgMonto').value=t.toFixed(2);}
+function credsSel(){return cliSel?[...cliSel.sel].sort().map(i=>({cc:cliSel.creds[i].cc,s:cliSel.creds[i].s,o:cliSel.creds[i].o})):[];}
 function preRegistrar(){const mt=+$('rgMonto').value;const dia=$('rgFecha').value||hoyYMD();
-  if(!(mt>0))return toast('Escribe el monto');if(mt>50000)return toast('Revisa el monto');if(dia>hoyYMD())return toast('La fecha no puede ser futura');
+  if(!(mt>0))return toast('Escribe el monto');if(cliSel&&cliSel.creds.length>1&&!cliSel.sel.size)return toast('Selecciona al menos un crédito del cliente');if(mt>50000)return toast('Revisa el monto');if(dia>hoyYMD())return toast('La fecha no puede ser futura');
   if(dia.slice(0,7)!==S.mes)return toast('Solo puedes registrar en '+mesNombre(S.mes));
   modal(`<h3>Confirmar registro</h3><p>${tipoReg==='refi'?'🟡 <b>Refinanciamiento</b>':'🔵 <b>Retiro</b>'} del ${dmy(dia)}</p><div class="monto" style="margin:10px 0">${m$(mt)}</div>
-    <p class="sm">${cliSel?'Cliente: <b>'+esc(cliSel.nom)+'</b>':'<span class="mut">Sin cliente seleccionado</span>'}</p>
+    <p class="sm">${cliSel?'Cliente: <b>'+esc(cliSel.nom)+'</b>':'<span class="mut">Sin cliente seleccionado</span>'}</p>${credsSel().length?`<div class="sm">${credsSel().map(c=>`• Crédito <b>${esc(c.cc)}</b> · ${m$(c.s)}`).join('<br>')}</div>`:''}
     <div style="display:flex;gap:8px;margin-top:14px"><button class="btn ghost" style="flex:1" onclick="closeModal()">Corregir</button><button class="btn gold" style="flex:1" onclick="registrar(this)">✅ Confirmar</button></div>`);}
 async function registrar(b){b.disabled=true;const dia=$('rgFecha').value||hoyYMD();
-  const data={cob:S.cob,tipo:tipoReg,monto:+(+$('rgMonto').value).toFixed(2),dia,mes:dia.slice(0,7),cliente:cliSel,nota:$('rgNota').value.trim()};
+  const cli=cliSel?{cod:cliSel.cod,nom:cliSel.nom,ced:cliSel.ced,cm:cliSel.cm,cr:cliSel.cr,rod:cliSel.rod,creditos:credsSel()}:null;
+  const data={cob:S.cob,tipo:tipoReg,monto:+(+$('rgMonto').value).toFixed(2),dia,mes:dia.slice(0,7),cliente:cli,nota:$('rgNota').value.trim()};
   try{await DB.add('registros',data);closeModal();toast('✅ Registrado: '+m$(data.monto));
     $('rgMonto').value='';$('rgNota').value='';cliSel=null;$('rgCliSel').innerHTML='';goTab('c-inicio');
   }catch(e){console.error(e);b.disabled=false;toast('No se pudo guardar. Revisa tu conexión.');}}
