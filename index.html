@@ -997,14 +997,14 @@ async function leerListado(file){if(!file)return;$('lsRes').innerHTML='<div clas
     const yr=new Date().getFullYear(),mesH=new Date().getMonth()+1;
     const defYM=k=>{const [y,m]=k.split('-').map(Number);return y===yr&&m>=5&&m<=mesH;};
     LS_F={fvi:[...S1].sort(),fvf:[...S2].sort(),cal:[...S3].sort((a,b)=>(RANK_CAL[a]??9)-(RANK_CAL[b]??9)),ori:[...S4].sort(),
-      sel:{fvi:new Set([...S1].filter(defYM)),fvf:new Set([...S2].filter(defYM)),cal:new Set([...S3].filter(c=>['A','B','C','D','E','E1'].includes(c))),ori:new Set([...S4].filter(o=>o!=='Origen Factura'&&o!=='(vacía)'))}};
+      sel:{fvi:new Set([...S1].filter(defYM)),fvf:new Set([...S2].filter(defYM)),cal:new Set([...S3].filter(c=>['A','B','C','D','E','E1'].includes(c))),ori:new Set([...S4].filter(o=>/trx-393|trx-142/i.test(o)))}};
     pintarFiltrosLs(file.name);procesarListado();
   }catch(e){console.error(e);$('lsRes').innerHTML=`<div class="info" style="background:#fee2e2;border-color:#fecaca;color:#7f1d1d">${esc(e.message)}</div>`;}}
 function ymLbl(k){const [y,m]=k.split('-');return MESES[+m-1].slice(0,3)+' '+y.slice(2);}
 function pintarFiltrosLs(nombre){const g=(k,t,lbl)=>{const vals=LS_F[k];const byY={};
     return `<div class="fgroup"><div class="t">${t}<span onclick="lsAll('${k}')">todos / ninguno</span></div><div class="chips">${vals.map(v=>`<span class="chip ${LS_F.sel[k].has(v)?'on':''}" onclick="lsTog('${k}',this,'${esc(v).replace(/'/g,"\\'")}')">${lbl?lbl(v):esc(v)}</span>`).join('')}</div></div>`;};
   $('lsFiltros').innerHTML=`<div class="okbox">📄 ${esc(nombre)} · ${fmt(LS_RAW.length,0)} filas de crédito</div>`+
-    `<details style="margin-top:8px"><summary class="sm b" style="cursor:pointer;color:var(--navy)">⚙️ Filtros (por defecto: 2026 de mayo a ${MESES[new Date().getMonth()]}, A–E1, sin "Origen Factura" ni vacías)</summary>`+
+    `<details style="margin-top:8px"><summary class="sm b" style="cursor:pointer;color:var(--navy)">⚙️ Filtros (por defecto: 2026 de mayo a ${MESES[new Date().getMonth()]}, A–E1, Origen: solo Refinanciamiento trx-393 y Facturación trx-142)</summary>`+
     g('fvi','📅 Fecha Vencimiento Inicial',ymLbl)+g('fvf','📅 Fecha Vencimiento Final',ymLbl)+g('cal','🏷️ Calificación Cliente Mensual')+g('ori','🧾 Origen Factura')+`</details>`+
     `<div class="fld" style="margin-top:10px"><label>Fecha de la foto</label><input type="date" id="lsFecha" class="inp" value="${hoyYMD()}" max="${hoyYMD()}"></div><label class="sm" style="display:flex;gap:6px;align-items:center;margin-top:10px"><input type="checkbox" id="lsTambienRefi" checked> Tomar también los refinanciamientos de este archivo (todas las fechas)</label>`;
   $('lsFiltros').classList.remove('hidden');}
