@@ -273,18 +273,14 @@ canvas{max-width:100%}
 
 <section class="sec" id="s-refis">
   <div class="card">
-    <div class="ch"><div><h3>Refinanciamientos según el sistema</h3><div class="sub">Del archivo Detalle por Clientes: todas las fechas de vencimiento, solo Origen Factura = Refinanciamiento, filtrado por Fecha Crédito. Monto = Saldo Crédito Final.</div></div></div>
-    <div class="fbar">
-      <label class="sm b">Fecha Crédito desde</label><input type="date" id="rfDesde" class="inp" onchange="renderRefis()">
-      <label class="sm b">hasta</label><input type="date" id="rfHasta" class="inp" onchange="renderRefis()">
-      <span class="chip" onclick="rfRango('hoy')">Hoy</span><span class="chip" onclick="rfRango('sem')">Esta semana</span><span class="chip" onclick="rfRango('mes')">Este mes</span><span class="chip" onclick="rfRango('ant')">Mes anterior</span>
-      <span class="sm mut" id="rfAct"></span>
-    </div>
+    <div class="ch"><div><h3>Refinanciamientos según el sistema</h3><div class="sub">Del Detalle por Clientes: todas las fechas de vencimiento, solo Origen Factura = Refinanciamiento y <b>Fecha Crédito del mes actual</b> (del día 1 a hoy). Monto = Saldo Crédito Final.</div></div></div>
+    <div class="fbar"><span class="chip gold on" id="rfRangoLbl"></span><span class="sm mut" id="rfAct"></span></div>
+    <input type="hidden" id="rfDesde"><input type="hidden" id="rfHasta">
     <div class="grid g4" id="rfKpis"></div>
   </div>
   <div class="grid g2" style="margin-top:14px">
     <div class="card"><h3>Refinanciamientos por cobrador</h3><div class="sub">Cantidad y monto frente a la meta mensual de refinanciamiento</div><div class="tw"><table id="tbRefi"></table></div></div>
-    <div class="card"><h3>Refinanciamientos por día</h3><div class="sub">Según Fecha Crédito</div><div class="chartbox"><canvas id="chRefi"></canvas></div></div>
+    <div class="card"><h3>Refinanciamientos por día</h3><div class="sub">Según Fecha Crédito del mes</div><div class="chartbox"><canvas id="chRefi"></canvas></div></div>
   </div>
   <div class="card" style="margin-top:14px">
     <div class="ch"><div><h3>Detalle de créditos refinanciados</h3></div><div style="display:flex;gap:8px"><select id="rfCob" class="inp" style="width:auto" onchange="renderRefis()"></select><button class="btn ghost sm" onclick="exportRefis()">⬇ Excel</button></div></div>
@@ -804,7 +800,6 @@ function copiarMsgMetas(){const dm=diasMes(S.mes);let t=`📊 *METAS ${MESES[+S.
    SUPERVISOR · REFINANCIAMIENTOS (SISTEMA)
    ===================================================================== */
 function initSupControles(){
-  const [d1]=rangoMes(S.mes);$('rfDesde').value=d1;$('rfHasta').value=hoyYMD().slice(0,7)===S.mes?hoyYMD():rangoMes(S.mes)[1];
   const opts='<option value="">Todos los cobradores</option>'+COBS.map(c=>`<option value="${c.id}">${esc(c.corto)}</option>`).join('');
   ['rfCob','lsCob','rgCob'].forEach(i=>$(i).innerHTML=opts);
   $('moCobChart').innerHTML='<option value="">Zona Milagro (total)</option>'+COBS.map(c=>`<option value="${c.id}">${esc(c.corto)}</option>`).join('');
@@ -818,7 +813,8 @@ function rfRango(k){const h=hoyYMD(),d=new Date();let a,b=h;
   else if(k==='mes')a=h.slice(0,8)+'01';else{const x=new Date(d.getFullYear(),d.getMonth()-1,1),m=`${x.getFullYear()}-${pad(x.getMonth()+1)}`;[a,b]=rangoMes(m);}
   $('rfDesde').value=a;$('rfHasta').value=b;renderRefis();}
 function renderRefis(){
-  const a=$('rfDesde').value||'0000',b=$('rfHasta').value||'9999',sel=$('rfCob').value;
+  const a=S.mes+'-01',b=hoyYMD().slice(0,7)===S.mes?hoyYMD():rangoMes(S.mes)[1],sel=$('rfCob').value;$('rfDesde').value=a;$('rfHasta').value=b;
+  $('rfRangoLbl').textContent=`📅 Fecha Crédito: ${dmy(a)} al ${dmy(b)} · ${mesNombre(S.mes)}`;
   $('rfAct').textContent=S.estado.refis?`Actualizado ${new Date(S.estado.refis.ts).toLocaleString('es-EC')}`:'Aún no hay archivo de refinanciamientos';
   let tN=0,tM=0,tMeta=0;const det=[];const porDia={};
   const rows=COBS.map(c=>{const it=refisDe(c.id,a,b);const m=it.reduce((s,x)=>s+x.saldo,0);tN+=it.length;tM+=m;const mt=metaDe(c.id).fm;tMeta+=mt;
@@ -826,7 +822,7 @@ function renderRefis(){
     return {c,n:it.length,m,mt,p:mt?m/mt:0};}).sort((x,y)=>y.m-x.m);
   const cobConRefi=rows.filter(r=>r.n>0).length;
   $('rfKpis').innerHTML=kpiCard('🔁','Refinanciamientos',fmt(tN,0),`${dmy(a)} al ${dmy(b)}`,null,null,'#fff1cc')+kpiCard('💵','Monto refinanciado',m0(tM),'Suma de Saldo Crédito Final',null,null,'#dbe7ff')+
-    kpiCard('🎯','Avance vs meta mensual',pctTxt(tMeta?tM/tMeta:0),`Meta zona ${m0(tMeta)}`,tMeta?tM/tMeta:0,'g','#fde7c4')+kpiCard('👥','Cobradores con refinanciamiento',`${cobConRefi} de ${COBS.length}`,`Promedio ${m0(tN?tM/tN:0)} por crédito`,null,null,'#e9e5ff');
+    kpiCard('🎯','Avance vs meta del mes',pctTxt(tMeta?tM/tMeta:0),`Meta zona ${m0(tMeta)}`,tMeta?tM/tMeta:0,'g','#fde7c4')+kpiCard('👥','Cobradores con refinanciamiento',`${cobConRefi} de ${COBS.length}`,`Promedio ${m0(tN?tM/tN:0)} por crédito`,null,null,'#e9e5ff');
   $('tbRefi').innerHTML='<thead><tr><th>Cobrador</th><th class="num">Cant.</th><th class="num">Monto</th><th class="num">Meta mensual</th><th class="num">%</th><th style="width:28%"></th></tr></thead><tbody>'+
     rows.map(r=>`<tr><td class="cobn nowrap">${esc(r.c.corto)}</td><td class="num">${r.n}</td><td class="num">${m$(r.m)}</td><td class="num mut">${m0(r.mt)}</td><td class="num pc">${pctTxt(r.p,0)}</td><td><div class="bar g" style="margin:0"><i style="width:${Math.min(100,r.p*100)}%"></i></div></td></tr>`).join('')+
     `</tbody><tfoot><tr><td>Total</td><td class="num">${tN}</td><td class="num">${m$(tM)}</td><td class="num">${m0(tMeta)}</td><td class="num">${pctTxt(tMeta?tM/tMeta:0,0)}</td><td></td></tr></tfoot>`;
@@ -1043,9 +1039,9 @@ let RF_TMP=null;
 async function leerRefis(file){if(!file)return;$('rfRes').innerHTML='<div class="info">Leyendo archivo…</div>';
   try{const aoa=await leerXlsx(file);const t=tablaDesde(aoa,'Cod Cliente');if(!t)throw new Error('No encuentro la columna "Cod Cliente".');
     RF_TMP=extraerRefis(filasDetalle(t));const [d1,d2]=rangoMes(S.mes);
-    const lst=[...RF_TMP.presentes].map(id=>{const it=RF_TMP.por[id]||[];const mm=it.filter(x=>x.fc>=d1&&x.fc<=d2);return `<tr><td class="cobn">${esc(COB_BY_ID[id].corto)}</td><td class="num">${it.length}</td><td class="num">${mm.length}</td><td class="num">${m0(mm.reduce((s,x)=>s+x.saldo,0))}</td></tr>`;}).join('');
-    $('rfRes').innerHTML=`<div class="okbox">📄 ${esc(file.name)} · ${RF_TMP.n} créditos por refinanciamiento de ${RF_TMP.presentes.size} cobrador(es)</div>`+
-      `<div class="tw" style="margin-top:8px;max-height:260px"><table><thead><tr><th>Cobrador</th><th class="num">Total</th><th class="num">En ${MESES[+S.mes.slice(5)-1]}</th><th class="num">Monto mes</th></tr></thead><tbody>${lst||'<tr><td colspan="4" class="mut center">Ningún cobrador del equipo en el archivo</td></tr>'}</tbody></table></div>`+
+    const lst=[...RF_TMP.presentes].map(id=>{const it=RF_TMP.por[id]||[];const mm=it.filter(x=>x.fc>=d1&&x.fc<=d2);return `<tr><td class="cobn">${esc(COB_BY_ID[id].corto)}</td><td class="num">${mm.length}</td><td class="num">${m$(mm.reduce((s,x)=>s+x.saldo,0))}</td></tr>`;}).join('');
+    $('rfRes').innerHTML=`<div class="okbox">📄 ${esc(file.name)} · ${RF_TMP.presentes.size} cobrador(es) · se cuentan solo los de Fecha Crédito en ${mesNombre(S.mes)}</div>`+
+      `<div class="tw" style="margin-top:8px;max-height:260px"><table><thead><tr><th>Cobrador</th><th class="num">Refis ${MESES[+S.mes.slice(5)-1]}</th><th class="num">Saldo Crédito Final</th></tr></thead><tbody>${lst||'<tr><td colspan="3" class="mut center">Ningún cobrador del equipo en el archivo</td></tr>'}</tbody></table></div>`+
       (RF_TMP.presentes.size?`<button class="btn gold block" style="margin-top:10px" onclick="publicarRefis(this)">🚀 Publicar refinanciamientos</button>`:'');
   }catch(e){console.error(e);$('rfRes').innerHTML=`<div class="info" style="background:#fee2e2;border-color:#fecaca;color:#7f1d1d">${esc(e.message)}</div>`;}}
 async function publicarRefis(b){b.disabled=true;try{const ts=Date.now();await guardarRefis(RF_TMP,ts);const est={refis:{ts,n:RF_TMP.n}};await DB.set('config/estado',est,true);Object.assign(S.estado,est);
