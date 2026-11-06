@@ -261,7 +261,7 @@ canvas{max-width:100%}
 <section class="sec" id="s-metas">
   <div class="card">
     <div class="ch"><div><h3>Cumplimiento semanal</h3><div class="sub">Semanas de 7 días desde el día 1. Meta semanal = meta mensual ÷ días del mes × días de la semana.</div></div>
-      <div class="chips"><span class="chip on" data-k="ret" onclick="setSemTipo(this)">Retiros</span><span class="chip" data-k="refi" onclick="setSemTipo(this)">Refinanciamiento</span></div></div>
+      <div class="chips"><span class="chip on" data-k="ret" onclick="setSemTipo(this)">Retiros</span><span class="chip" data-k="refi" onclick="setSemTipo(this)">Refinanciamiento (sistema)</span></div></div>
     <div class="tw"><table id="tbSem"></table></div>
   </div>
   <div class="card" style="margin-top:14px">
@@ -396,6 +396,7 @@ canvas{max-width:100%}
   <div class="card" style="max-width:560px;margin:0 auto">
     <h3>Registrar recuperación</h3><div class="sub">Anota el monto que recuperaste. Se refleja al instante en tu avance y en el panel del supervisor.</div>
     <div class="tipo-sel"><button id="tpR" class="r on" onclick="setTipo('retiro')">🔵 Retiro<small>Monto recuperado</small></button><button id="tpF" class="f" onclick="setTipo('refi')">🟡 Refinanciamiento<small>Monto refinanciado</small></button></div>
+    <div class="info hidden" id="notaRefi" style="margin:0 0 12px">ℹ️ Tu avance de refinanciamiento se mide <b>según el sistema</b> (créditos refinanciados con Fecha Crédito del mes). Este registro sirve como aviso para tu supervisor.</div>
     <div class="fld"><label>Monto ($)</label><input id="rgMonto" class="inp monto" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0,00"></div>
     <div class="fld"><label>Cliente (busca por nombre o cédula)</label><input id="rgCliQ" class="inp" placeholder="Toca aquí para ver tus clientes o escribe nombre/cédula" oninput="buscarCli()" onfocus="buscarCli()" autocomplete="off"><div id="rgCliRes"></div><div id="rgCliSel"></div></div>
     <div class="fld"><label>Fecha</label><input id="rgFecha" class="inp" type="date"></div>
@@ -704,6 +705,11 @@ function agregRegs(regs,mes){
     o[k]+=m;o.n++;o.ult=Math.max(o.ult,tsMs(r.ts));if(r.dia===hoy)o[k+'Hoy']+=m;
     const s=semIdx(r.dia);o.sem[s]=o.sem[s]||{ret:0,refi:0};o.sem[s][k]+=m;
     o.dias[r.dia]=o.dias[r.dia]||{ret:0,refi:0};o.dias[r.dia][k]+=m;});
+  // Refinanciamiento: SIEMPRE según el sistema (Fecha Crédito del mes, Saldo Crédito Final)
+  const [d1,d2]=rangoMes(mes);
+  COBS.forEach(c=>{const o=out[c.id];o.refi=0;o.refiHoy=0;Object.values(o.sem).forEach(x=>x.refi=0);Object.values(o.dias).forEach(x=>x.refi=0);o.refiN=0;
+    refisDe(c.id,d1,d2).forEach(x=>{const v=+x.saldo||0;o.refi+=v;o.refiN++;if(x.fc===hoy)o.refiHoy+=v;
+      const si=semIdx(x.fc);o.sem[si]=o.sem[si]||{ret:0,refi:0};o.sem[si].refi+=v;o.dias[x.fc]=o.dias[x.fc]||{ret:0,refi:0};o.dias[x.fc].refi+=v;});});
   return out;
 }
 function refisDe(id,desde,hasta){return (S.refis[id]||[]).filter(x=>x.fc&&x.fc>=desde&&x.fc<=hasta);}
@@ -730,8 +736,9 @@ function renderResumen(){
   const pR=mRet?tRet/mRet:0,pF=mRefi?tRefi/mRefi:0,pS=mRefi?rfM/mRefi:0;
   $('kpis').innerHTML=
     kpiCard('🔵','Retiros del mes',m0(tRet),`Meta ${m0(mRet)} · <b class="pc ${pcCls(pR,ritmo)}">${pctTxt(pR)}</b> (ritmo ${pctTxt(ritmo,0)})`,pR,semaforo(pR,ritmo),'#dbe7ff')+
-    kpiCard('🟡','Refinanciamiento registrado',m0(tRefi),`Meta ${m0(mRefi)} · <b class="pc ${pcCls(pF,ritmo)}">${pctTxt(pF)}</b>`,pF,'g','#fff1cc')+
-    kpiCard('🔁','Refinanciamientos sistema',`${rfN} · ${m0(rfM)}`,`Fecha Crédito en ${mesNombre(mes)} · ${pctTxt(pS)} de la meta`,pS,'g','#fde7c4')+
+    kpiCard('🔁','Refinanciamiento (sistema)',m0(tRefi),`${rfN} créditos · Meta ${m0(mRefi)} · <b class="pc ${pcCls(pF,ritmo)}">${pctTxt(pF)}</b>`,pF,'g','#fff1cc')+
+    (()=>{const sw0=semIdx(hoyYMD()),w=semanasMes(mes)[Math.min(sw0,semanasMes(mes).length-1)];let v=0;COBS.forEach(c=>v+=(ag[c.id].sem[w.i]||{refi:0}).refi);const mt=mRefi*w.dias/dm,p=mt?v/mt:0;
+      return kpiCard('📅',`Refinanc. semana ${w.i+1} (${w.a}–${w.b})`,m0(v),`Meta semanal ${m0(mt)} · <b>${pctTxt(p)}</b>`,p,'g','#fde7c4');})()+
     kpiCard('📈','Mora proy. contiene total',z?pctTxt(z.pct,2):'—',z?`Libera ${pctTxt(z.pl,2)} · Contiene ${pctTxt(z.pc,2)} · corte ${dmy(ult.id)}`:'Carga el archivo de mora proyectada',null,null,'#dcfce7');
   $('rkSub').textContent=`${mesNombre(mes)} · día ${dt} de ${dm} · ritmo esperado ${pctTxt(ritmo,0)} · semana ${semIdx(hoyYMD())+1}`;
   const sw=semIdx(hoyYMD()),sems=semanasMes(mes),swd=sems[sw]||sems[0],hoyD=Number(hoyYMD().slice(8,10));
@@ -744,22 +751,21 @@ function renderResumen(){
     let pl=null,pct=null;if(mt&&mt.si){pl=(mt.sl+mt.sr)/mt.si;pct=pl+mt.sc/mt.si;}
     return {c,m,a,pr,pf,ps,rfn:rr.length,rfm,psr,psf,glob,pl,pct};});
   rows.sort((x,y)=>y.glob-x.glob);
-  const th=`<thead><tr><th>#</th><th>Cobrador</th><th class="num">Retiros</th><th class="num">Meta</th><th class="num">%</th><th class="num">Refinanc.</th><th class="num">Meta</th><th class="num">%</th><th class="num">Refis sistema</th><th class="num">% meta</th><th class="num">Semana ${sw+1} ret / refi</th><th class="num">Hoy</th><th class="num">% Libera</th><th class="num">% Cont. total</th><th>Estado</th></tr></thead>`;
+  const th=`<thead><tr><th>#</th><th>Cobrador</th><th class="num">Retiros</th><th class="num">Meta</th><th class="num">%</th><th class="num">Refinanc. sistema</th><th class="num">Cant.</th><th class="num">Meta</th><th class="num">%</th><th class="num">Semana ${sw+1} ret / refi</th><th class="num">Hoy</th><th class="num">% Libera</th><th class="num">% Cont. total</th><th>Estado</th></tr></thead>`;
   const tb=rows.map((r,i)=>{const sem=semaforo(r.glob,ritmo);const hoy=r.a.retHoy+r.a.refiHoy;
     return `<tr><td>${i+1}</td><td class="cobn nowrap">${esc(r.c.corto)}</td>
     <td class="num">${m$(r.a.ret)}</td><td class="num mut">${m0(r.m.rm)}</td><td class="num"><span class="pc ${pcCls(r.pr,ritmo)}">${pctTxt(r.pr,0)}</span></td>
-    <td class="num">${m$(r.a.refi)}</td><td class="num mut">${m0(r.m.fm)}</td><td class="num"><span class="pc ${pcCls(r.pf,ritmo)}">${pctTxt(r.pf,0)}</span></td>
-    <td class="num">${r.rfn} · ${m0(r.rfm)}</td><td class="num"><span class="pc ${pcCls(r.ps,ritmo)}">${pctTxt(r.ps,0)}</span></td>
+    <td class="num">${m$(r.a.refi)}</td><td class="num">${r.rfn}</td><td class="num mut">${m0(r.m.fm)}</td><td class="num"><span class="pc ${pcCls(r.pf,ritmo)}">${pctTxt(r.pf,0)}</span></td>
     <td class="num"><span class="pc ${pcCls(r.psr,ritSem)}">${pctTxt(r.psr,0)}</span> / <span class="pc ${pcCls(r.psf,ritSem)}">${pctTxt(r.psf,0)}</span></td>
-    <td class="num">${hoy?m0(hoy):'<span class="mut sm">sin registro</span>'}</td>
+    <td class="num">${hoy?m0(hoy):'<span class="mut sm">—</span>'}</td>
     <td class="num">${pctTxt(r.pl,2)}</td><td class="num b">${pctTxt(r.pct,2)}</td>
     <td><span class="dot ${sem}"></span></td></tr>`;}).join('');
   const T=rows.reduce((t,r)=>{t.ret+=r.a.ret;t.rm+=r.m.rm;t.refi+=r.a.refi;t.fm+=r.m.fm;t.rfn+=r.rfn;t.rfm+=r.rfm;t.hoy+=r.a.retHoy+r.a.refiHoy;return t;},{ret:0,rm:0,refi:0,fm:0,rfn:0,rfm:0,hoy:0});
-  const tf=`<tfoot><tr><td></td><td>Zona Milagro</td><td class="num">${m$(T.ret)}</td><td class="num">${m0(T.rm)}</td><td class="num">${pctTxt(T.rm?T.ret/T.rm:0,0)}</td><td class="num">${m$(T.refi)}</td><td class="num">${m0(T.fm)}</td><td class="num">${pctTxt(T.fm?T.refi/T.fm:0,0)}</td><td class="num">${T.rfn} · ${m0(T.rfm)}</td><td class="num">${pctTxt(T.fm?T.rfm/T.fm:0,0)}</td><td></td><td class="num">${m0(T.hoy)}</td><td class="num">${z?pctTxt(z.pl,2):'—'}</td><td class="num">${z?pctTxt(z.pct,2):'—'}</td><td></td></tr></tfoot>`;
+  const tf=`<tfoot><tr><td></td><td>Zona Milagro</td><td class="num">${m$(T.ret)}</td><td class="num">${m0(T.rm)}</td><td class="num">${pctTxt(T.rm?T.ret/T.rm:0,0)}</td><td class="num">${m$(T.refi)}</td><td class="num">${T.rfn}</td><td class="num">${m0(T.fm)}</td><td class="num">${pctTxt(T.fm?T.refi/T.fm:0,0)}</td><td></td><td class="num">${m0(T.hoy)}</td><td class="num">${z?pctTxt(z.pl,2):'—'}</td><td class="num">${z?pctTxt(z.pct,2):'—'}</td><td></td></tr></tfoot>`;
   $('tbRank').innerHTML=th+'<tbody>'+tb+'</tbody>'+tf;
   window._rankRows=rows;
   // gráfico diario
-  const labs=[],dRet=[],dRefi=[];for(let d=1;d<=dm;d++){const k=`${mes}-${pad(d)}`;labs.push(d);let a=0,b=0;COBS.forEach(c=>{const x=ag[c.id].dias[k];if(x){a+=x.ret;}refisDe(c.id,k,k).forEach(y=>b+=+y.saldo||0);});dRet.push(+a.toFixed(2));dRefi.push(+b.toFixed(2));}
+  const labs=[],dRet=[],dRefi=[];for(let d=1;d<=dm;d++){const k=`${mes}-${pad(d)}`;labs.push(d);let a=0,b=0;COBS.forEach(c=>{const x=ag[c.id].dias[k];if(x){a+=x.ret;b+=x.refi;}});dRet.push(+a.toFixed(2));dRefi.push(+b.toFixed(2));}
   mkChart('chDiario',{type:'bar',data:{labels:labs,datasets:[{label:'Retiros',data:dRet,backgroundColor:'#2563eb',borderRadius:4,stack:'s'},{label:'Refinanciamiento (sistema)',data:dRefi,backgroundColor:'#e8a317',borderRadius:4,stack:'s'}]},
     options:{maintainAspectRatio:false,plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${m$(c.raw)}`}}},scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,ticks:{callback:v=>'$'+fmt(v,0)}}}}});
   const pv=r=>cumpTipo==='ret'?r.pr:r.ps;const rs=[...rows].sort((a,b)=>pv(b)-pv(a));
@@ -769,7 +775,7 @@ function renderResumen(){
     {type:'line',label:'Ritmo esperado',data:rs.map(()=>+(ritmo*100).toFixed(1)),borderColor:'#0a1f44',borderDash:[6,4],pointRadius:0,borderWidth:2}]},
     options:{indexAxis:'y',maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmt(c.raw,1)+'%'}}},scales:{x:{ticks:{callback:v=>v+'%'},suggestedMax:100},y:{grid:{display:false},ticks:{autoSkip:false,font:{size:11}}}}}});
 }
-function exportRanking(){const r=(window._rankRows||[]).map(x=>({Cobrador:x.c.corto,'Retiros $':+x.a.ret.toFixed(2),'Meta retiros':x.m.rm,'% retiros':+(x.pr*100).toFixed(1),'Refinanciamiento $':+x.a.refi.toFixed(2),'Meta refinanc.':x.m.fm,'% refinanc.':+(x.pf*100).toFixed(1),'Refis sistema (#)':x.rfn,'Refis sistema $':+x.rfm.toFixed(2),'% Libera':x.pl!=null?+(x.pl*100).toFixed(2):'','% Contiene total':x.pct!=null?+(x.pct*100).toFixed(2):''}));
+function exportRanking(){const r=(window._rankRows||[]).map(x=>({Cobrador:x.c.corto,'Retiros $':+x.a.ret.toFixed(2),'Meta retiros':x.m.rm,'% retiros':+(x.pr*100).toFixed(1),'Refinanciamiento sistema $':+x.a.refi.toFixed(2),'Cant. refinanc.':x.rfn,'Meta refinanc.':x.m.fm,'% refinanc.':+(x.pf*100).toFixed(1),'% Libera':x.pl!=null?+(x.pl*100).toFixed(2):'','% Contiene total':x.pct!=null?+(x.pct*100).toFixed(2):''}));
   xlsxDownload(r,`Tablero_Cobranza_${S.mes}.xlsx`,'Tablero');}
 
 /* =====================================================================
@@ -1171,11 +1177,11 @@ function renderCInicio(){
   const nom=c.corto.split(' ')[1]||c.corto;const h=new Date().getHours();
   $('cHero').innerHTML=`<div class="mut sm">${h<12?'Buenos días':h<19?'Buenas tardes':'Buenas noches'},</div><h2>${esc(nom)} 👋</h2><div class="mut sm">Tu avance de ${mesNombre(mes)} · día ${dt} de ${dm}</div>
     <div class="ring-row"><div class="ring"><div class="l">🔵 Retiros</div><div class="v">${m0(ag.ret)}</div><div class="sm mut">de ${m0(m.rm)} · <b style="color:#fff">${pctTxt(pr,0)}</b></div><div class="bar ${semaforo(pr,ritmo)}"><i style="width:${Math.min(100,pr*100)}%"></i></div><div class="xs" style="color:#c9d4ea;margin-top:6px">${falR>0?`Te faltan ${m0(falR)} · ${m0(falR/rest)} por día`:'🎉 ¡Meta cumplida!'}</div></div>
-    <div class="ring"><div class="l">🟡 Refinanciamiento</div><div class="v">${m0(ag.refi)}</div><div class="sm mut">de ${m0(m.fm)} · <b style="color:#fff">${pctTxt(pf,0)}</b></div><div class="bar ${semaforo(pf,ritmo)}"><i style="width:${Math.min(100,pf*100)}%"></i></div><div class="xs" style="color:#c9d4ea;margin-top:6px">${falF>0?`Te faltan ${m0(falF)} · ${m0(falF/rest)} por día`:'🎉 ¡Meta cumplida!'}</div></div></div>`;
+    <div class="ring"><div class="l">🟡 Refinanciamiento (sistema)</div><div class="v">${m0(ag.refi)}</div><div class="sm mut">de ${m0(m.fm)} · <b style="color:#fff">${pctTxt(pf,0)}</b></div><div class="bar ${semaforo(pf,ritmo)}"><i style="width:${Math.min(100,pf*100)}%"></i></div><div class="xs" style="color:#c9d4ea;margin-top:6px">${falF>0?`Te faltan ${m0(falF)} · ${m0(falF/rest)} por día`:'🎉 ¡Meta cumplida!'}</div></div></div>`;
   const sems=semanasMes(mes),sw=Math.min(semIdx(hoyYMD()),sems.length-1),s=sems[sw],sv=ag.sem[sw]||{ret:0,refi:0},msr=m.rm*s.dias/dm,msf=m.fm*s.dias/dm;
   $('cSemana').innerHTML=`<h3>Semana ${sw+1} · del ${s.a} al ${s.b}</h3><div class="sub">Meta semanal según tu cartera</div>
     <div class="mini"><b>Retiros</b><span>${m$(sv.ret)} / ${m0(msr)}</span></div><div class="bar"><i style="width:${Math.min(100,msr?sv.ret/msr*100:0)}%"></i></div>
-    <div class="mini" style="margin-top:12px"><b>Refinanciamiento</b><span>${m$(sv.refi)} / ${m0(msf)}</span></div><div class="bar g"><i style="width:${Math.min(100,msf?sv.refi/msf*100:0)}%"></i></div>
+    <div class="mini" style="margin-top:12px"><b>Refinanciamiento (sistema)</b><span>${m$(sv.refi)} / ${m0(msf)}</span></div><div class="bar g"><i style="width:${Math.min(100,msf?sv.refi/msf*100:0)}%"></i></div>
     <div class="mini" style="margin-top:12px"><span>Hoy registraste</span><b>${m$(ag.retHoy+ag.refiHoy)}</b></div>`;
   const [d1,d2]=rangoMes(mes);const rr=refisDe(id,d1,d2),rm=rr.reduce((a,x)=>a+x.saldo,0);
   const cl=(S.listado[id]?.cl)||[];const sie=cl.filter(x=>x.nro>=1&&x.nro<=3).length;
@@ -1187,7 +1193,7 @@ function renderCInicio(){
   $('cRegs').innerHTML=regs.length?regs.map(r=>{const can=!r.ts||now-tsMs(r.ts)<86400000;return `<div class="reg-it"><div><span class="badge ${r.tipo==='refi'?'t-refi':'t-retiro'}">${r.tipo==='refi'?'Refinanciamiento':'Retiro'}</span> <b>${m$(r.monto)}</b><div class="xs mut">${dmy(r.dia)} · ${esc(r.cliente?.nom||'sin cliente')}${(r.cliente?.creditos||[]).length?' · créd. '+r.cliente.creditos.map(c=>esc(c.cc)).join(', '):''}${r.nota?' · '+esc(r.nota):''}</div></div>${can?`<button class="btn ghost sm" onclick="borrarReg('${r.id}')">🗑</button>`:''}</div>`;}).join(''):'<div class="mut center" style="padding:16px">Aún no registras nada este mes. Toca ➕ Registrar.</div>';
 }
 let tipoReg='retiro',cliSel=null;
-function setTipo(t){tipoReg=t;$('tpR').classList.toggle('on',t==='retiro');$('tpF').classList.toggle('on',t==='refi');}
+function setTipo(t){tipoReg=t;$('notaRefi')&&$('notaRefi').classList.toggle('hidden',t!=='refi');$('tpR').classList.toggle('on',t==='retiro');$('tpF').classList.toggle('on',t==='refi');}
 function calInfo(x){return `<span class="xs mut">Mensual</span> ${calBadge(x.cm)} <span class="xs mut">Rodamiento</span> ${calBadge(x.cr)} ${rodBadge(x.rod)} ${sieBadge(x.nro)}`;}
 function buscarCli(){const q=$('rgCliQ').value.trim().toUpperCase();
   const cl=(S.listado[S.cob]?.cl)||[];
