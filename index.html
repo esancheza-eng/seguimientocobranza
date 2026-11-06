@@ -1034,25 +1034,27 @@ function procesarListado(){
     const creds=c.rows.map(r=>({cc:String(r['Cod Credito']??'').trim(),s:+num(r['Saldo Crédito Final']).toFixed(2),o:oriC(String(r['Origen Factura']||'')),n:Math.round(num(r['Nro Vencimiento Final']))||0,f:ymdUTC(r._fvf),l:String(r['Línea Producto']||'').trim()})).sort((a,b)=>b.s-a.s);
     porCob[c.cob].push({cod:c.cod,nom:c.nom,ced:c.ced,tel:c.tel,dir:c.dir,zona:c.zona,cm:c.cm,cd:c.cd,dias,cr,fvi:ymdUTC(c.minI),fvf:ymdUTC(c.minF),
       cv:+cv.toFixed(2),sc:+sc.toFixed(2),vc:+vc.toFixed(2),nro:nro||0,rod:catRod(c.cm,cr),nc:c.rows.length,ref,creds});});
-  LS_OUT={porCob,filas,clientes:Object.keys(cl).length,corte:ymdUTC(new Date(corte))};
+  const presentes=COBS.filter(c=>LS_RAW.some(r=>cobDe(r['Nombre Cobrador Actual'])===c)).map(c=>c.id);
+  LS_OUT={porCob,filas,clientes:Object.keys(cl).length,corte:ymdUTC(new Date(corte)),presentes};
   const sie=Object.values(porCob).flat().filter(x=>x.nro>=1&&x.nro<=3).length;
   $('lsRes').innerHTML=`<div class="info"><b>${fmt(filas,0)}</b> filas después de filtros → <b>${fmt(LS_OUT.clientes,0)}</b> clientes de ${COBS.length-faltan.size} cobradores · siembra 1-2-3: <b>${sie}</b>`+
-    (faltan.size?`<br>⚠️ Sin filas: ${[...faltan].map(i=>COB_BY_ID[i].corto).join(', ')}`:'')+`</div><button class="btn gold block" style="margin-top:10px" onclick="publicarListado(this)">🚀 Publicar listado en línea</button>`;
+    (presentes.length<COBS.length?`<br>ℹ️ El archivo trae solo ${presentes.length} cobrador(es): <b>${presentes.map(i=>COB_BY_ID[i].corto).join(', ')}</b>. Solo se actualizará su listado; los demás <b>se mantienen como están</b>.`:(faltan.size?`<br>⚠️ Sin filas después de filtros: ${[...faltan].map(i=>COB_BY_ID[i].corto).join(', ')}`:''))+`</div><button class="btn gold block" style="margin-top:10px" onclick="publicarListado(this)">🚀 Publicar listado en línea</button>`;
 }
 async function publicarListado(b){if(!LS_OUT)return;if(b)b.disabled=true;
   try{const ts=Date.now();
-    for(const c of COBS){await DB.set('listado/'+c.id,{cl:LS_OUT.porCob[c.id],ts,corte:LS_OUT.corte});}
-    const est={listado:{ts,filas:LS_OUT.filas,clientes:LS_OUT.clientes,corte:LS_OUT.corte}};
-    const fecha=$('lsFecha')?.value||hoyYMD();const res={};
-    for(const c of COBS){const a=LS_OUT.porCob[c.id];await DB.set('listadohist/'+fecha+'__'+c.id,{cl:a,fecha,cob:c.id,ts,corte:LS_OUT.corte});
+    const P=COBS.filter(c=>LS_OUT.presentes.includes(c.id));
+    for(const c of P){await DB.set('listado/'+c.id,{cl:LS_OUT.porCob[c.id],ts,corte:LS_OUT.corte});S.listado[c.id]={cl:LS_OUT.porCob[c.id],ts,corte:LS_OUT.corte};}
+    const totCli=COBS.reduce((t,c)=>t+((S.listado[c.id]?.cl)||[]).length,0);
+    const est={listado:{ts,filas:LS_OUT.filas,clientes:totCli,corte:LS_OUT.corte}};
+    const fecha=$('lsFecha')?.value||hoyYMD();const prevRes=(S.lsHist.find(h=>h.id===fecha)||{}).cobs||{};const res={...prevRes};
+    for(const c of P){const a=LS_OUT.porCob[c.id];await DB.set('listadohist/'+fecha+'__'+c.id,{cl:a,fecha,cob:c.id,ts,corte:LS_OUT.corte});
       res[c.id]={n:a.length,sc:+a.reduce((t,x)=>t+x.sc,0).toFixed(2),cv:+a.reduce((t,x)=>t+x.cv,0).toFixed(2),s1:a.filter(x=>x.nro===1).length,s2:a.filter(x=>x.nro===2).length,s3:a.filter(x=>x.nro===3).length,
         mej:a.filter(x=>x.rod==='Mejora').length,man:a.filter(x=>x.rod==='Mantiene').length,det:a.filter(x=>x.rod==='Deteriora').length};}
     await DB.set('listadoresumen/'+fecha,{fecha,cobs:res,ts});{const i=S.lsHist.findIndex(h=>h.id===fecha);const d={id:fecha,fecha,cobs:res};i>=0?S.lsHist[i]=d:S.lsHist.push(d);S.lsHist.sort((a,b)=>a.id.localeCompare(b.id));}
     let extra='';
     if($('lsTambienRefi')?.checked){const r=extraerRefis(LS_RAW);await guardarRefis(r,ts,fecha);est.refis={ts,n:r.n};extra=` y ${r.n} refinanciamientos`;}
     await DB.set('config/estado',est,true);Object.assign(S.estado,est);
-    COBS.forEach(c=>S.listado[c.id]={cl:LS_OUT.porCob[c.id],ts,corte:LS_OUT.corte});
-    toast(`✅ Listado publicado${extra}`);$('lsRes').innerHTML+=`<div class="okbox">✅ Publicado ${new Date(ts).toLocaleString('es-EC')}. Cada cobrador ya ve su cartera.</div>`;renderEstado();
+    toast(`✅ Listado publicado${extra}`);$('lsRes').innerHTML+=`<div class="okbox">✅ Publicado ${new Date(ts).toLocaleString('es-EC')}. Se actualizó: ${P.map(c=>c.corto).join(', ')}.</div>`;renderEstado();
   }catch(e){console.error(e);toast('No se pudo publicar: '+e.message);if(b)b.disabled=false;}}
 
 /* ---- 2. Refinanciamientos ---- */
