@@ -245,9 +245,9 @@ canvas{max-width:100%}
 <section class="sec" id="s-resumen">
   <div class="grid g4" id="kpis"></div>
   <div class="grid g2" style="margin-top:14px">
-    <div class="card"><div class="ch"><div><h3>Avance diario del mes</h3><div class="sub">Montos registrados por los cobradores cada día</div></div></div><div class="chartbox"><canvas id="chDiario"></canvas></div></div>
-    <div class="card"><div class="ch"><div><h3>Cumplimiento por cobrador</h3><div class="sub">% de la meta mensual alcanzado · línea = ritmo esperado a hoy</div></div>
-      <div class="chips"><span class="chip on" data-k="ret" onclick="setCumpTipo(this)">Retiros</span><span class="chip" data-k="refi" onclick="setCumpTipo(this)">Refinanciamiento</span></div></div>
+    <div class="card"><div class="ch"><div><h3>Avance diario del mes</h3><div class="sub">Retiros registrados por los cobradores · refinanciamientos según el sistema (Fecha Crédito)</div></div></div><div class="chartbox"><canvas id="chDiario"></canvas></div></div>
+    <div class="card"><div class="ch"><div><h3>Cumplimiento por cobrador</h3><div class="sub" id="cumpSub">% de la meta mensual alcanzado · línea = ritmo esperado a hoy</div></div>
+      <div class="chips"><span class="chip on" data-k="ret" onclick="setCumpTipo(this)">Retiros</span><span class="chip" data-k="refi" onclick="setCumpTipo(this)">Refinanciamiento (sistema)</span></div></div>
       <div class="chartbox"><canvas id="chCump"></canvas></div></div>
   </div>
   <div class="card" style="margin-top:14px">
@@ -386,11 +386,9 @@ canvas{max-width:100%}
 
 <!-- ======== COBRADOR ======== -->
 <section class="sec" id="c-inicio">
+  <div class="card" id="cSistema" style="margin-bottom:14px;border-left:5px solid var(--gold)"></div>
   <div class="cob-hero" id="cHero"></div>
-  <div class="grid g2" style="margin-top:14px">
-    <div class="card" id="cSemana"></div>
-    <div class="card" id="cSistema"></div>
-  </div>
+  <div class="card" id="cSemana" style="margin-top:14px"></div>
   <div class="card" style="margin-top:14px"><div class="ch"><div><h3>Mis registros del mes</h3><div class="sub">Puedes borrar un registro equivocado durante las primeras 24 horas</div></div><button class="btn gold sm" onclick="goTab('c-registrar')">➕ Registrar</button></div><div id="cRegs"></div></div>
 </section>
 
@@ -761,12 +759,13 @@ function renderResumen(){
   $('tbRank').innerHTML=th+'<tbody>'+tb+'</tbody>'+tf;
   window._rankRows=rows;
   // gráfico diario
-  const labs=[],dRet=[],dRefi=[];for(let d=1;d<=dm;d++){const k=`${mes}-${pad(d)}`;labs.push(d);let a=0,b=0;COBS.forEach(c=>{const x=ag[c.id].dias[k];if(x){a+=x.ret;b+=x.refi;}});dRet.push(+a.toFixed(2));dRefi.push(+b.toFixed(2));}
-  mkChart('chDiario',{type:'bar',data:{labels:labs,datasets:[{label:'Retiros',data:dRet,backgroundColor:'#2563eb',borderRadius:4,stack:'s'},{label:'Refinanciamiento',data:dRefi,backgroundColor:'#e8a317',borderRadius:4,stack:'s'}]},
+  const labs=[],dRet=[],dRefi=[];for(let d=1;d<=dm;d++){const k=`${mes}-${pad(d)}`;labs.push(d);let a=0,b=0;COBS.forEach(c=>{const x=ag[c.id].dias[k];if(x){a+=x.ret;}refisDe(c.id,k,k).forEach(y=>b+=+y.saldo||0);});dRet.push(+a.toFixed(2));dRefi.push(+b.toFixed(2));}
+  mkChart('chDiario',{type:'bar',data:{labels:labs,datasets:[{label:'Retiros',data:dRet,backgroundColor:'#2563eb',borderRadius:4,stack:'s'},{label:'Refinanciamiento (sistema)',data:dRefi,backgroundColor:'#e8a317',borderRadius:4,stack:'s'}]},
     options:{maintainAspectRatio:false,plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${m$(c.raw)}`}}},scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,ticks:{callback:v=>'$'+fmt(v,0)}}}}});
-  const rs=[...rows].sort((a,b)=>(cumpTipo==='ret'?b.pr-a.pr:b.pf-a.pf));
-  mkChart('chCump',{type:'bar',data:{labels:rs.map(r=>r.c.corto),datasets:[{label:'% meta',data:rs.map(r=>+(100*(cumpTipo==='ret'?r.pr:r.pf)).toFixed(1)),
-    backgroundColor:rs.map(r=>{const s=semaforo(cumpTipo==='ret'?r.pr:r.pf,ritmo);return s==='ok'?'#16a34a':s==='warn'?'#eab308':'#dc2626';}),borderRadius:5},
+  const pv=r=>cumpTipo==='ret'?r.pr:r.ps;const rs=[...rows].sort((a,b)=>pv(b)-pv(a));
+  $('cumpSub').textContent=cumpTipo==='ret'?'Retiros registrados por los cobradores · % de la meta mensual · línea = ritmo esperado a hoy':'Refinanciamientos según el sistema (Fecha Crédito del mes, Saldo Crédito Final) · % de la meta mensual · línea = ritmo esperado a hoy';
+  mkChart('chCump',{type:'bar',data:{labels:rs.map(r=>r.c.corto),datasets:[{label:'% meta',data:rs.map(r=>+(100*pv(r)).toFixed(1)),
+    backgroundColor:rs.map(r=>{const s=semaforo(pv(r),ritmo);return s==='ok'?'#16a34a':s==='warn'?'#eab308':'#dc2626';}),borderRadius:5},
     {type:'line',label:'Ritmo esperado',data:rs.map(()=>+(ritmo*100).toFixed(1)),borderColor:'#0a1f44',borderDash:[6,4],pointRadius:0,borderWidth:2}]},
     options:{indexAxis:'y',maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmt(c.raw,1)+'%'}}},scales:{x:{ticks:{callback:v=>v+'%'},suggestedMax:100},y:{grid:{display:false},ticks:{autoSkip:false,font:{size:11}}}}}});
 }
