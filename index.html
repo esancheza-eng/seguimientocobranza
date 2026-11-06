@@ -1111,7 +1111,7 @@ async function publicarMora(b){const f=$('moFechaCarga').value;if(!f)return toas
     toast('✅ Corte '+dmy(f)+' guardado');$('moRes').innerHTML+=`<div class="okbox">✅ Corte ${dmy(f)} guardado. Ya son ${S.mora.length} corte(s).</div>`;renderEstado();
   }catch(e){console.error(e);toast('No se pudo guardar');b.disabled=false;}}
 function renderEstado(){const e=S.estado||{};const l=x=>x?new Date(x).toLocaleString('es-EC'):'—';
-  $('estadoCargas').innerHTML=`<div class="sumrow" style="margin:0"><div class="s">📋 Listado<b>${e.listado?fmt(e.listado.clientes,0)+' clientes':'—'}</b>${l(e.listado?.ts)}</div><div class="s">🔁 Refinanciamientos<b>${e.refis?e.refis.n+' créditos':'—'}</b>${l(e.refis?.ts)}</div><div class="s">📈 Mora proyectada<b>${S.mora.length} corte(s)</b>${S.mora.length?'último '+dmy(S.mora[S.mora.length-1].id):'—'}</div></div>`;}
+  $('estadoCargas').innerHTML=`<div class="sumrow" style="margin:0"><div class="s">📋 Listado<b>${e.listado?fmt(e.listado.clientes,0)+' clientes':'—'}</b>${l(e.listado?.ts)}</div><div class="s">🔁 Refinanciamientos de ${MESES[+S.mes.slice(5)-1]}<b>${(()=>{const [d1,d2]=rangoMes(S.mes);let n=0,m=0;COBS.forEach(c=>refisDe(c.id,d1,d2).forEach(x=>{n++;m+=+x.saldo||0;}));return n+' créditos · '+m0(m);})()}</b>${l(e.refis?.ts)}<div class="xs mut">${COBS.reduce((t,c)=>t+(S.refis[c.id]||[]).length,0)} refinanciamientos guardados de todas las fechas</div></div><div class="s">📈 Mora proyectada<b>${S.mora.length} corte(s)</b>${S.mora.length?'último '+dmy(S.mora[S.mora.length-1].id):'—'}</div></div>`;}
 
 /* =====================================================================
    SUPERVISOR · EQUIPO (accesos)
