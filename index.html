@@ -391,7 +391,7 @@ canvas{max-width:100%}
     <h3>Registrar recuperación</h3><div class="sub">Anota el monto que recuperaste. Se refleja al instante en tu avance y en el panel del supervisor.</div>
     <div class="tipo-sel"><button id="tpR" class="r on" onclick="setTipo('retiro')">🔵 Retiro<small>Monto recuperado</small></button><button id="tpF" class="f" onclick="setTipo('refi')">🟡 Refinanciamiento<small>Monto refinanciado</small></button></div>
     <div class="fld"><label>Monto ($)</label><input id="rgMonto" class="inp monto" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0,00"></div>
-    <div class="fld"><label>Cliente (busca por nombre o cédula)</label><input id="rgCliQ" class="inp" placeholder="Escribe al menos 3 letras" oninput="buscarCli()" autocomplete="off"><div id="rgCliRes"></div><div id="rgCliSel"></div></div>
+    <div class="fld"><label>Cliente (busca por nombre o cédula)</label><input id="rgCliQ" class="inp" placeholder="Toca aquí para ver tus clientes o escribe nombre/cédula" oninput="buscarCli()" onfocus="buscarCli()" autocomplete="off"><div id="rgCliRes"></div><div id="rgCliSel"></div></div>
     <div class="fld"><label>Fecha</label><input id="rgFecha" class="inp" type="date"></div>
     <div class="fld"><label>Nota (opcional)</label><input id="rgNota" class="inp" maxlength="140" placeholder="Ej.: abono, nro. de recibo"></div>
     <button class="btn gold block" onclick="preRegistrar()">Guardar registro</button>
@@ -1123,9 +1123,12 @@ function renderCInicio(){
 }
 let tipoReg='retiro',cliSel=null;
 function setTipo(t){tipoReg=t;$('tpR').classList.toggle('on',t==='retiro');$('tpF').classList.toggle('on',t==='refi');}
-function buscarCli(){const q=$('rgCliQ').value.trim().toUpperCase();if(q.length<3){$('rgCliRes').innerHTML='';return;}
-  const cl=(S.listado[S.cob]?.cl)||[];const r=cl.filter(x=>x.nom.toUpperCase().includes(q)||String(x.ced).includes(q)).slice(0,25);
-  $('rgCliRes').innerHTML=r.length?`<div class="cli-res">${r.map(x=>`<div onclick="elegirCli('${esc(x.cod)}')"><b>${esc(x.nom)}</b> ${calBadge(x.cm)} ${sieBadge(x.nro)}<div class="xs mut">${esc(x.ced)} · saldo ${m$(x.sc)} · vencido ${m$(x.cv)}</div></div>`).join('')}</div>`:'<div class="xs mut" style="margin-top:6px">No aparece en tu listado. Puedes guardar sin cliente y anotarlo en la nota.</div>';}
+function buscarCli(){const q=$('rgCliQ').value.trim().toUpperCase();
+  const cl=(S.listado[S.cob]?.cl)||[];
+  if(!cl.length){$('rgCliRes').innerHTML='<div class="xs mut" style="margin-top:6px">Tu supervisor aún no publica tu listado de clientes.</div>';return;}
+  const r=cl.filter(x=>!q||x.nom.toUpperCase().includes(q)||String(x.ced).includes(q)).sort((a,b)=>b.sc-a.sc);
+  $('rgCliRes').innerHTML=r.length?`<div class="xs mut" style="margin:6px 0 2px">${q?r.length+' coincidencia(s)':'Tus '+cl.length+' clientes · toca uno o escribe para filtrar'}</div><div class="cli-res">${r.slice(0,60).map(x=>`<div onclick="elegirCli('${esc(x.cod)}')"><b>${esc(x.nom)}</b> ${calBadge(x.cm)} ${sieBadge(x.nro)}<div class="xs mut">${esc(x.ced)} · saldo ${m$(x.sc)} · vencido ${m$(x.cv)}</div></div>`).join('')}</div>`
+    :'<div class="xs mut" style="margin-top:6px">⚠️ Ese cliente no está en tu cartera (puede ser de otro cobrador). Puedes guardar sin cliente y anotarlo en la nota.</div>';}
 function elegirCli(cod){const x=((S.listado[S.cob]?.cl)||[]).find(y=>y.cod===cod);if(!x)return;cliSel={cod:x.cod,nom:x.nom,ced:x.ced,cm:x.cm};
   $('rgCliRes').innerHTML='';$('rgCliQ').value='';$('rgCliSel').innerHTML=`<div class="cli-sel">👤 <b>${esc(x.nom)}</b> ${calBadge(x.cm)} <span class="lnk" style="float:right;cursor:pointer;color:var(--bad)" onclick="cliSel=null;$('rgCliSel').innerHTML=''">✕</span><div class="xs mut">${esc(x.ced)} · saldo crédito ${m$(x.sc)} · cuota vencida ${m$(x.cv)} · ${x.dias} días</div></div>`;}
 function preRegistrar(){const mt=+$('rgMonto').value;const dia=$('rgFecha').value||hoyYMD();
