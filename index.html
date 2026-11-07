@@ -1079,6 +1079,9 @@ function procesarListado(){
       minF:null,minI:null,rows:[]};
     if(r._fvf&&(!c.minF||r._fvf<c.minF))c.minF=r._fvf;if(r._fvi&&(!c.minI||r._fvi<c.minI))c.minI=r._fvi;c.rows.push(r);});
   const porCob={};COBS.forEach(c=>porCob[c.id]=[]);
+  // Un crédito = una sola fila (si el archivo repite el mismo Cod Credito, se toma una vez, la de vencimiento más antiguo)
+  let dupl=0;
+  Object.values(cl).forEach(c=>{const m=new Map();c.rows.forEach(r=>{const k=String(r['Cod Credito']??'').trim()||Math.random();const o=m.get(k);if(o){dupl++;if(r._fvf&&(!o._fvf||r._fvf<o._fvf))m.set(k,r);}else m.set(k,r);});c.rows=[...m.values()];});
   Object.values(cl).forEach(c=>{let cv=0,sc=0,vc=0,nro=null,ref=false;
     c.rows.forEach(r=>{if(r._fvf&&c.minF&&r._fvf<=c.minF){cv+=num(r['Saldo Cuota']);const n=Math.round(num(r['Nro Vencimiento Final']));if(n>0&&(nro==null||n<nro))nro=n;}
       sc+=num(r['Saldo Crédito Final']);vc+=num(r['Valor Cuota']);if(/refinanc/i.test(String(r['Origen Factura']||'')))ref=true;});
@@ -1088,9 +1091,9 @@ function procesarListado(){
     porCob[c.cob].push({cod:c.cod,nom:c.nom,ced:c.ced,tel:c.tel,dir:c.dir,zona:c.zona,cm:c.cm,cd:c.cd,dias,cr,fvi:ymdUTC(c.minI),fvf:ymdUTC(c.minF),
       cv:+cv.toFixed(2),sc:+sc.toFixed(2),vc:+vc.toFixed(2),nro:nro||0,rod:catRod(c.cm,cr),nc:c.rows.length,ref,creds});});
   const presentes=COBS.filter(c=>LS_RAW.some(r=>cobDe(r['Nombre Cobrador Actual'])===c)).map(c=>c.id);
-  LS_OUT={porCob,filas,clientes:Object.keys(cl).length,corte:ymdUTC(new Date(corte)),presentes};
+  filas-=dupl;LS_OUT={dupl,porCob,filas,clientes:Object.keys(cl).length,corte:ymdUTC(new Date(corte)),presentes};
   const sie=Object.values(porCob).flat().filter(x=>x.nro>=1&&x.nro<=3).length;
-  $('lsRes').innerHTML=`<div class="info"><b>${fmt(filas,0)}</b> filas después de filtros → <b>${fmt(LS_OUT.clientes,0)}</b> clientes de ${COBS.length-faltan.size} cobradores · siembra 1-2-3: <b>${sie}</b>`+
+  $('lsRes').innerHTML=`<div class="info">${dupl?`⚠️ El archivo trae <b>${fmt(dupl,0)}</b> filas repetidas del mismo crédito; se cuentan una sola vez.<br>`:''}<b>${fmt(filas,0)}</b> créditos después de filtros → <b>${fmt(LS_OUT.clientes,0)}</b> clientes de ${COBS.length-faltan.size} cobradores · siembra 1-2-3: <b>${sie}</b>`+
     (presentes.length<COBS.length?`<br>ℹ️ El archivo trae solo ${presentes.length} cobrador(es): <b>${presentes.map(i=>COB_BY_ID[i].corto).join(', ')}</b>. Solo se actualizará su listado; los demás <b>se mantienen como están</b>.`:(faltan.size?`<br>⚠️ Sin filas después de filtros: ${[...faltan].map(i=>COB_BY_ID[i].corto).join(', ')}`:''))+`</div><button class="btn gold block" style="margin-top:10px" onclick="publicarListado(this)">🚀 Publicar listado en línea</button>`;
 }
 async function publicarListado(b){if(!LS_OUT)return;if(b)b.disabled=true;
