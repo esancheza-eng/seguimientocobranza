@@ -463,7 +463,7 @@ canvas{max-width:100%}
     <div class="fld"><label>Monto ($)</label><input id="rgMonto" class="inp monto" type="text" readonly tabindex="-1" placeholder="0,00" style="background:#f4f7fc;cursor:not-allowed"><div class="xs b" style="color:var(--blue);margin-top:5px;text-align:center">🔎 Busca el cliente y selecciona el crédito que retiraste</div></div>
     <div class="fld"><label>Cliente (busca por nombre o cédula)</label><input id="rgCliQ" class="inp" placeholder="Toca aquí para ver tus clientes o escribe nombre/cédula" oninput="buscarCli()" onfocus="buscarCli()" autocomplete="off"><div id="rgCliRes"></div><div id="rgCliSel"></div></div>
     <div class="fld"><label>Fecha</label><input id="rgFecha" class="inp" type="date"></div>
-    <div class="fld"><label>Nota (opcional)</label><input id="rgNota" class="inp" maxlength="140" placeholder="Ej.: abono, nro. de recibo"></div>
+    <div class="fld"><label>Detalle los productos retirados</label><input id="rgNota" class="inp" maxlength="300" placeholder="Ej.: refrigeradora Indurama 2 puertas, TV Samsung 50&quot;"></div>
     <button class="btn gold block" onclick="preRegistrar()">Guardar registro</button>
   </div>
 </section>
