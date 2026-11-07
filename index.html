@@ -268,6 +268,7 @@ canvas{max-width:100%}
     <div class="ch"><div><h3>Metas del mes</h3><div class="sub">Asignadas según el monto de cartera de cada cobrador. Al guardar, se reflejan al instante en el panel de cada cobrador.</div></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn ghost sm" onclick="copiarMsgMetas()">📋 Copiar mensaje WhatsApp</button><button class="btn gold sm" onclick="guardarMetas()">💾 Guardar metas</button></div></div>
     <div class="tw"><table id="tbMetas"></table></div>
+    <div id="libresBox" style="margin-top:14px"></div>
   </div>
 </section>
 
@@ -305,6 +306,11 @@ canvas{max-width:100%}
       <div class="fbar"><select id="moCobChart" class="inp" onchange="renderMoraChart()"></select></div>
       <div class="chartbox"><canvas id="chMora"></canvas></div></div>
     <div class="card"><h3>Total por cobrador</h3><div class="sub">Variación en puntos frente al corte anterior</div><div class="tw" style="max-height:340px"><table id="tbMora"></table></div></div>
+  </div>
+  <div class="card" style="margin-top:14px">
+    <div class="ch"><div><h3>🎯 Metas de mora por cobrador</h3><div class="sub" id="mmSub"></div></div>
+      <div class="chips"><span class="chip on" data-k="L" onclick="setMmTipo(this)">Libera</span><span class="chip" data-k="C" onclick="setMmTipo(this)">Contiene total</span></div></div>
+    <div class="tw"><table id="tbMetaMora"></table></div>
   </div>
   <div class="card" style="margin-top:14px">
     <div class="ch"><div><h3>Por tramos de calificación</h3><div class="sub">Solo los cobradores del equipo</div></div>
@@ -409,6 +415,7 @@ canvas{max-width:100%}
 
 <!-- ======== COBRADOR ======== -->
 <section class="sec" id="c-inicio">
+  <div class="card" id="cMetaMora" style="margin-bottom:14px;border-left:5px solid var(--purple)"></div>
   <div class="card" id="cCobro" style="margin-bottom:14px;border-left:5px solid var(--ok)"></div>
   <div class="card" id="cSistema" style="margin-bottom:14px;border-left:5px solid var(--gold)"></div>
   <div class="cob-hero" id="cHero"></div>
@@ -613,7 +620,17 @@ const DB={
    ===================================================================== */
 const S={cobro:[],cobroCob:{},lsHist:[],refisHist:[],lsFoto:null,rol:null,cob:null,email:'',mes:hoyYMD().slice(0,7),metas:null,regs:[],listado:{},refis:{},mora:[],estado:{},equipo:{},unsub:[]};
 function metasDefault(){const o={};COBS.forEach(c=>o[c.id]={rm:c.rm,fm:c.fm});return o;}
-function metaDe(id){const m=(S.metas&&S.metas[id])||metasDefault()[id]||{rm:0,fm:0};return {rm:+m.rm||0,fm:+m.fm||0};}
+function metaDe(id){const m=(S.metas&&S.metas[id])||metasDefault()[id]||{rm:0,fm:0};return {rm:+m.rm||0,fm:+m.fm||0,ml:m.ml!=null?+m.ml:0.31,mc:m.mc!=null?+m.mc:0.66};}
+const LIBRES_MES=6;
+function libresDefault(mes){const [y,m]=mes.split('-').map(Number),n=diasMes(mes),dom=[];for(let d=1;d<=n;d++)if(new Date(y,m-1,d).getDay()===0)dom.push(d);
+  const out=[...dom];for(let d=1;d<=n&&out.length<LIBRES_MES;d++)if(!out.includes(d))out.push(d);return out.sort((a,b)=>a-b);}
+function libresDe(mes){return (S.libresMes&&S.libresMes.length)?S.libresMes:libresDefault(mes);}
+function diasLabRest(mes){const h=hoyYMD();const n=diasMes(mes);if(h.slice(0,7)>mes)return 0;const desde=h.slice(0,7)===mes?Number(h.slice(8,10)):1;const lib=libresDe(mes);let c=0;for(let d=desde;d<=n;d++)if(!lib.includes(d))c++;return c;}
+// Metas de mora: valores en $ de un corte (fila Total)
+function moraMetaCalc(f,fa,m,dl){if(!f||!f.si)return null;const lib=f.sl+f.sr,ct=f.sl+f.sr+f.sc;
+  const mL=f.si*m.ml,mC=f.si*m.mc,falL=Math.max(0,mL-lib),falC=Math.max(0,mC-ct);
+  return {si:f.si,lib,ct,pl:lib/f.si,pct:ct/f.si,mL,mC,falL,falC,hoyL:dl?falL/dl:falL,hoyC:dl?falC/dl:falC,
+    ayerL:fa?+(lib-(fa.sl+fa.sr)).toFixed(2)+0:null,ayerC:fa?+(ct-(fa.sl+fa.sr+fa.sc)).toFixed(2)+0:null};}
 
 function lgTab(t){$('lgTabCob').classList.toggle('on',t==='cob');$('lgTabSup').classList.toggle('on',t==='sup');
   $('lgCob').classList.toggle('hidden',t!=='cob');$('lgSup').classList.toggle('hidden',t!=='sup');$('lgErr').textContent='';}
@@ -702,7 +719,7 @@ async function cambiarMes(m){S.mes=m;S.unsub.forEach(f=>{try{f()}catch(e){}});S.
    CARGA DE DATOS
    ===================================================================== */
 async function cargarSup(){
-  S.unsub.push(DB.listen('metas',[],docs=>{const d=docs.find(x=>x.id===S.mes);S.metas=d?d.cobs:null;if(['s-resumen','s-metas'].includes(tabActual))renderTab(tabActual);}));
+  S.unsub.push(DB.listen('metas',[],docs=>{const d=docs.find(x=>x.id===S.mes);S.metas=d?d.cobs:null;S.libresMes=d&&d.libres?d.libres:null;if(['s-resumen','s-metas','s-mora'].includes(tabActual))renderTab(tabActual);}));
   S.unsub.push(DB.listen('registros',[['mes','==',S.mes]],docs=>{S.regs=docs;if(['s-resumen','s-metas','s-registros'].includes(tabActual))renderTab(tabActual);}));
   const [ls,rf,mo,es,eq,lh,rh,ce]=await Promise.all([DB.list('listado'),DB.list('refis'),DB.list('mora'),DB.get('config/estado'),DB.list('equipo'),DB.list('listadoresumen'),DB.list('refishist'),DB.list('cobro')]).catch(e=>{console.error(e);return [[],[],[],null,[],[],[],[]];});
   S.cobro=(ce||[]).sort((a,b)=>a.id.localeCompare(b.id));
@@ -714,7 +731,7 @@ async function cargarSup(){
 }
 async function cargarCob(){
   const id=S.cob;
-  S.unsub.push(DB.listen('metas',[],docs=>{const d=docs.find(x=>x.id===S.mes);S.metas=d?d.cobs:null;if(tabActual==='c-inicio')renderCInicio();}));
+  S.unsub.push(DB.listen('metas',[],docs=>{const d=docs.find(x=>x.id===S.mes);S.metas=d?d.cobs:null;S.libresMes=d&&d.libres?d.libres:null;if(tabActual==='c-inicio')renderCInicio();}));
   S.unsub.push(DB.listen('registros',[['cob','==',id],['mes','==',S.mes]],docs=>{S.regs=docs;if(tabActual==='c-inicio')renderCInicio();}));
   const [ls,rf,mo,ce]=await Promise.all([DB.get('listado/'+id),DB.get('refis/'+id),DB.get('moracob/'+id),DB.get('cobrocob/'+id)]).catch(e=>{console.error(e);return [null,null,null,null];});
   S.cobroCob=ce&&ce.dias?ce.dias:{};
@@ -823,16 +840,20 @@ function renderMetas(){
   const tf='<tfoot><tr><td>Zona</td>'+tot.map((t,i)=>`<td class="num">${i>sw?'—':m0(t.v)+' / '+m0(t.m)}</td>`).join('')+`<td class="num">${m0(tv)} / ${m0(tm)}</td></tr></tfoot>`;
   $('tbSem').innerHTML=th+'<tbody>'+tb+'</tbody>'+tf;
   // editor
-  const th2='<thead><tr><th>Cobrador</th><th class="num">Retiros mensual</th><th class="num">Retiros semanal</th><th class="num">Refinanc. mensual</th><th class="num">Refinanc. semanal</th></tr></thead>';
+  const th2='<thead><tr><th>Cobrador</th><th class="num">Retiros mensual</th><th class="num">Retiros semanal</th><th class="num">Refinanc. mensual</th><th class="num">Refinanc. semanal</th><th class="num">Meta % Libera</th><th class="num">Meta % Contiene total</th></tr></thead>';
   let sr=0,sf=0;
   const tb2=COBS.map(c=>{const m=metaDe(c.id);sr+=m.rm;sf+=m.fm;return `<tr><td class="cobn">${esc(c.corto)}</td>
     <td class="num"><input class="inp" style="width:110px;text-align:right" type="number" min="0" step="1" id="mr_${c.id}" value="${m.rm}" oninput="metaPrev()"></td><td class="num mut" id="mrs_${c.id}">${m0(m.rm*7/dm)}</td>
-    <td class="num"><input class="inp" style="width:110px;text-align:right" type="number" min="0" step="1" id="mf_${c.id}" value="${m.fm}" oninput="metaPrev()"></td><td class="num mut" id="mfs_${c.id}">${m0(m.fm*7/dm)}</td></tr>`;}).join('');
-  $('tbMetas').innerHTML=th2+'<tbody>'+tb2+`</tbody><tfoot><tr><td>Total zona</td><td class="num" id="mrT">${m0(sr)}</td><td class="num"></td><td class="num" id="mfT">${m0(sf)}</td><td></td></tr></tfoot>`;
+    <td class="num"><input class="inp" style="width:110px;text-align:right" type="number" min="0" step="1" id="mf_${c.id}" value="${m.fm}" oninput="metaPrev()"></td><td class="num mut" id="mfs_${c.id}">${m0(m.fm*7/dm)}</td>
+    <td class="num"><input class="inp" style="width:80px;text-align:right" type="number" min="0" max="100" step="0.1" id="ml_${c.id}" value="${+(m.ml*100).toFixed(2)}"> %</td><td class="num"><input class="inp" style="width:80px;text-align:right" type="number" min="0" max="100" step="0.1" id="mc_${c.id}" value="${+(m.mc*100).toFixed(2)}"> %</td></tr>`;}).join('');
+  $('tbMetas').innerHTML=th2+'<tbody>'+tb2+`</tbody><tfoot><tr><td>Total zona</td><td class="num" id="mrT">${m0(sr)}</td><td class="num"></td><td class="num" id="mfT">${m0(sf)}</td><td></td><td></td><td></td></tr></tfoot>`;
+  const lib=libresDe(S.mes),n=diasMes(S.mes);
+  $('libresBox').innerHTML=`<div class="sm b" style="color:var(--navy);margin-bottom:6px">📅 Días libres del mes (${LIBRES_MES} por cobrador): toca para marcar o desmarcar · Días laborales: <b id="labN">${n-lib.length}</b></div><div class="chips" id="libresChips">${Array.from({length:n},(_,i)=>i+1).map(d=>`<span class="chip ${lib.includes(d)?'gold on':''}" data-d="${d}" onclick="this.classList.toggle('on');this.classList.toggle('gold');$('labN').textContent=${n}-document.querySelectorAll('#libresChips .chip.on').length">${d}</span>`).join('')}</div>`;
 }
 function metaPrev(){const dm=diasMes(S.mes);let a=0,b=0;COBS.forEach(c=>{const r=+$('mr_'+c.id).value||0,f=+$('mf_'+c.id).value||0;a+=r;b+=f;$('mrs_'+c.id).textContent=m0(r*7/dm);$('mfs_'+c.id).textContent=m0(f*7/dm);});$('mrT').textContent=m0(a);$('mfT').textContent=m0(b);}
-async function guardarMetas(){const cobs={};COBS.forEach(c=>cobs[c.id]={rm:+$('mr_'+c.id).value||0,fm:+$('mf_'+c.id).value||0});
-  try{await DB.set('metas/'+S.mes,{cobs,actualizado:Date.now()});toast('✅ Metas de '+mesNombre(S.mes)+' guardadas');}catch(e){console.error(e);toast('No se pudo guardar');}}
+async function guardarMetas(){const cobs={};COBS.forEach(c=>cobs[c.id]={rm:+$('mr_'+c.id).value||0,fm:+$('mf_'+c.id).value||0,ml:(+$('ml_'+c.id).value||0)/100,mc:(+$('mc_'+c.id).value||0)/100});
+  const libres=[...document.querySelectorAll('#libresChips .chip.on')].map(x=>+x.dataset.d);S.libresMes=libres;
+  try{await DB.set('metas/'+S.mes,{cobs,libres,actualizado:Date.now()});toast('✅ Metas de '+mesNombre(S.mes)+' guardadas');}catch(e){console.error(e);toast('No se pudo guardar');}}
 function copiarMsgMetas(){const dm=diasMes(S.mes);let t=`📊 *METAS ${MESES[+S.mes.slice(5)-1].toUpperCase()} – ZONA MILAGRO*\nAsignadas según el monto de cartera de cada uno.\n`;
   COBS.forEach(c=>{const m=metaDe(c.id);t+=`\n👤 *${c.corto}*\nRetiros: ${m0(m.rm*7/dm)} semanal · ${m0(m.rm)} mensual\nRefinanciamiento: ${m0(m.fm*7/dm)} semanal · ${m0(m.fm)} mensual\n`;});
   navigator.clipboard?.writeText(t).then(()=>toast('📋 Mensaje copiado'),()=>modal(`<h3>Mensaje</h3><textarea class="inp" rows="16">${esc(t)}</textarea>`));}
@@ -904,6 +925,22 @@ function exportRefis(){xlsxDownload((window._rfDet||[]).map(x=>({'Fecha Crédito
 let moMetric='pct';
 function setMoMetric(el){document.querySelectorAll('#moMetric .chip').forEach(c=>c.classList.toggle('on',c===el));moMetric=el.dataset.k;renderTramos();}
 function pctsF(f){if(!f||!f.si)return {pl:null,pc:null,pct:null};const pl=(f.sl+f.sr)/f.si,pc=f.sc/f.si;return {pl,pc,pct:pl+pc};}
+let mmTipo='L';
+function setMmTipo(el){document.querySelectorAll('#s-mora .chip[data-k="L"],#s-mora .chip[data-k="C"]').forEach(c=>c.classList.toggle('on',c===el));mmTipo=el.dataset.k;renderMetaMora();}
+function renderMetaMora(){
+  const snap=S.mora.find(s=>s.id===$('moFecha').value)||S.mora[S.mora.length-1];const i=S.mora.indexOf(snap),ant=i>0?S.mora[i-1]:null;const dl=diasLabRest(S.mes);const L=mmTipo==='L';
+  $('mmSub').innerHTML=snap?`Corte ${dmy(snap.id)}${ant?` · ayer = diferencia con el corte del ${dmy(ant.id)}`:''} · <b>Te quedan ${dl} días laborales</b> · hoy debe = falta ÷ ${dl}`:'Carga la mora proyectada';
+  const T={si:0,v:0,m:0,f:0,a:0,h:0,hasA:false};
+  const rows=COBS.map(c=>{const r=moraMetaCalc(moraTot(snap,c.id),moraTot(ant,c.id),metaDe(c.id),dl);return {c,r,mp:L?metaDe(c.id).ml:metaDe(c.id).mc};}).sort((a,b)=>((b.r?(L?b.r.pl/b.mp:b.r.pct/b.mp):-1)-(a.r?(L?a.r.pl/a.mp:a.r.pct/a.mp):-1)));
+  $('tbMetaMora').innerHTML=`<thead><tr><th>Cobrador</th><th class="num">Saldo inicial</th><th class="num">${L?'Libera':'Contiene total'} a la fecha</th><th class="num">%</th><th class="num">Meta %</th><th class="num">Meta $</th><th class="num">Falta</th><th class="num">Ayer recuperó</th><th class="num">Hoy debe</th><th style="width:13%">Avance</th></tr></thead><tbody>`+
+    rows.map(({c,r,mp})=>{if(!r)return `<tr><td class="cobn">${esc(c.corto)}</td><td colspan="9" class="mut">Sin datos en el corte</td></tr>`;
+      const v=L?r.lib:r.ct,p=L?r.pl:r.pct,m=L?r.mL:r.mC,f=L?r.falL:r.falC,a=L?r.ayerL:r.ayerC,h=L?r.hoyL:r.hoyC,av=mp?p/mp:0;
+      T.si+=r.si;T.v+=v;T.m+=m;T.f+=f;T.h+=h;if(a!=null){T.a+=a;T.hasA=true;}
+      return `<tr><td class="cobn nowrap">${esc(c.corto)}</td><td class="num">${m0(r.si)}</td><td class="num">${m$(v)}</td><td class="num b">${pctTxt(p,2)}</td><td class="num">${pctTxt(mp,0)}</td><td class="num mut">${m0(m)}</td><td class="num">${f>0?m0(f):'<span class="ok b">✔ Cumplida</span>'}</td>
+        <td class="num" style="font-weight:700;color:${a==null?'inherit':a>=0?'var(--ok)':'var(--bad)'}">${a==null?'<span class="mut">—</span>':(a>=0?'+':'')+m$(a)}</td><td class="num b" style="color:#9a3412">${m$(h)}</td>
+        <td><div class="bar ${av>=1?'ok':av>=.5?'warn':'bad'}" style="margin:0"><i style="width:${Math.min(100,av*100)}%"></i></div><div class="xs mut">${pctTxt(av,1)} de la meta</div></td></tr>`;}).join('')+
+    `</tbody><tfoot><tr><td>Zona</td><td class="num">${m0(T.si)}</td><td class="num">${m$(T.v)}</td><td class="num">${pctTxt(T.si?T.v/T.si:0,2)}</td><td></td><td class="num">${m0(T.m)}</td><td class="num">${m0(T.f)}</td><td class="num">${T.hasA?(T.a>=0?'+':'')+m$(T.a):'—'}</td><td class="num">${m$(T.h)}</td><td></td></tr></tfoot>`;
+}
 function renderMora(){
   const sel=$('moFecha'),prev=sel.value;
   sel.innerHTML=S.mora.length?[...S.mora].reverse().map(s=>`<option value="${s.id}">${dmy(s.id)}</option>`).join(''):'<option value="">Sin cortes</option>';
@@ -920,7 +957,7 @@ function renderMora(){
   $('tbMora').innerHTML='<thead><tr><th>Cobrador</th><th class="num">Saldo inicial</th><th class="num">% Libera</th><th class="num">% Contiene</th><th class="num">% Cont. total</th><th class="num">Δ</th></tr></thead><tbody>'+
     rows.map(r=>`<tr><td class="cobn nowrap">${esc(r.c.corto)}</td><td class="num">${r.f?m0(r.f.si):'—'}</td><td class="num">${pctTxt(r.p.pl,2)}</td><td class="num">${pctTxt(r.p.pc,2)}</td><td class="num b">${pctTxt(r.p.pct,2)}</td><td class="num">${dlt(r.p.pct,r.pa.pct)}</td></tr>`).join('')+'</tbody>'+
     (z?`<tfoot><tr><td>Zona</td><td class="num">${m0(z.si)}</td><td class="num">${pctTxt(z.pl,2)}</td><td class="num">${pctTxt(z.pc,2)}</td><td class="num">${pctTxt(z.pct,2)}</td><td class="num">${dlt(z.pct,za&&za.pct)}</td></tr></tfoot>`:'');
-  renderTramos();renderMoraChart();
+  renderTramos();renderMoraChart();renderMetaMora();
 }
 function renderTramos(){
   const snap=S.mora.find(s=>s.id===$('moFecha').value);
@@ -1268,8 +1305,26 @@ function renderCCobro(){const dias=Object.keys(S.cobroCob||{}).filter(d=>d.slice
     <div style="display:flex;gap:22px;flex-wrap:wrap;align-items:flex-end"><div><div class="kpi" style="--accent:transparent"><div class="vl" style="margin:0">${m0(u.t)}</div></div><div class="xs mut">acumulado del mes</div></div>
     <div><div class="b" style="font-size:18px;color:var(--ok)">+${m0(dia)}</div><div class="xs mut">${a?'desde el corte del '+dmy(dias[dias.length-2]):'primer corte del mes'}</div></div></div>
     <div style="margin-top:10px"><div style="display:flex;justify-content:space-between;font-size:17px;font-weight:800;color:var(--navy);padding:7px 0;border-bottom:1px solid #eef1f7"><span>🛡️ Contiene</span><span>${m$(u.c)}</span></div><div style="display:flex;justify-content:space-between;font-size:17px;font-weight:800;color:var(--navy);padding:7px 0;border-bottom:1px solid #eef1f7"><span>🔻 Deteriora</span><span>${m$(u.d)}</span></div><div style="display:flex;justify-content:space-between;font-size:17px;font-weight:800;color:var(--navy);padding:7px 0;border-bottom:1px solid #eef1f7;border-bottom:0"><span>✅ Libera</span><span>${m$(u.l)}</span></div></div>`;}
+function renderCMetaMora(){
+  const dias=Object.keys(S.moraCob||{}).filter(d=>d.slice(0,7)===S.mes).sort();
+  if(!dias.length){$('cMetaMora').innerHTML='<h3>🎯 Mis metas de mora</h3><div class="sub">Tu supervisor aún no carga la mora proyectada de este mes.</div>';return;}
+  const tot=d=>(S.moraCob[d]||[]).find(x=>x.cal==='Total');const u=dias[dias.length-1],a=dias.length>1?dias[dias.length-2]:null;
+  const m=metaDe(S.cob),dl=diasLabRest(S.mes),r=moraMetaCalc(tot(u),a?tot(a):null,m,dl);
+  if(!r){$('cMetaMora').innerHTML='<h3>🎯 Mis metas de mora</h3><div class="sub">Sin datos en el último corte.</div>';return;}
+  const fila=(t,v)=>`<div style="display:flex;justify-content:space-between;font-size:15px;font-weight:700;padding:6px 0;border-bottom:1px solid #eef1f7"><span>${t}</span><span>${v}</span></div>`;
+  const bloque=(tit,ic,p,mp,v,mt,f,ay,hoy,col)=>`<div style="margin-top:12px;padding-top:10px;border-top:2px solid #eef1f7">
+    <div class="b" style="color:var(--navy);font-size:15px">${ic} ${tit}</div>
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:4px"><div><div style="font:800 28px Montserrat,Inter,sans-serif;color:var(--navy)">${pctTxt(p,2)}</div><div class="xs mut">a la fecha</div></div><div class="right"><div style="font:800 20px Montserrat,Inter,sans-serif;color:var(--navy)">${pctTxt(mp,0)}</div><div class="xs mut">meta</div></div></div>
+    <div class="bar ${col}" style="height:12px"><i style="width:${Math.min(100,mp?p/mp*100:0)}%"></i></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px">
+      <div style="background:#ecfdf3;border-radius:12px;padding:12px"><div class="xs b" style="color:#166534">✅ AYER RECUPERASTE</div><div style="font:800 21px Montserrat,Inter,sans-serif;color:#166534">${ay==null?'—':(ay>=0?'+':'')+m$(ay)}</div><div class="xs mut">${a?dmy(a)+' → '+dmy(u):'primer corte del mes'}</div></div>
+      <div style="background:#fff7ed;border-radius:12px;padding:12px;border:2px solid #fdba74"><div class="xs b" style="color:#9a3412">🔥 HOY DEBES RECUPERAR</div><div style="font:800 21px Montserrat,Inter,sans-serif;color:#9a3412">${f>0?m$(hoy):'✔'}</div><div class="xs mut">para llegar al ${pctTxt(mp,0)}</div></div></div>
+    <div style="margin-top:10px">${fila('Meta '+pctTxt(mp,0),m$(mt))}${fila('A la fecha',m$(v))}<div style="display:flex;justify-content:space-between;font-size:15px;font-weight:800;padding:6px 0;color:var(--bad)"><span>Te falta</span><span>${f>0?m$(f):'✔ Cumplida'}</span></div></div></div>`;
+  $('cMetaMora').innerHTML=`<h3>🎯 Mis metas de mora</h3><div class="sub">Mora proyectada · corte ${dmy(u)} · saldo inicial ${m$(r.si)}</div>
+    <div class="b" style="margin-top:6px;color:var(--purple)">📅 Te quedan ${dl} días laborales</div>`+
+    bloque('Libera','✅',r.pl,m.ml,r.lib,r.mL,r.falL,r.ayerL,r.hoyL,'ok')+bloque('Contiene total','🛡️',r.pct,m.mc,r.ct,r.mC,r.falC,r.ayerC,r.hoyC,'')+'';}
 function renderCInicio(){
-  renderCCobro();
+  renderCMetaMora();renderCCobro();
   const id=S.cob,c=COB_BY_ID[id],m=metaDe(id),mes=S.mes,ag=agregRegs(S.regs,mes)[id],dm=diasMes(mes),dt=diaTranscurrido(mes),ritmo=dt/dm,rest=Math.max(1,dm-dt+1);
   const pr=m.rm?ag.ret/m.rm:0,pf=m.fm?ag.refi/m.fm:0;
   const falR=Math.max(0,m.rm-ag.ret),falF=Math.max(0,m.fm-ag.refi);
