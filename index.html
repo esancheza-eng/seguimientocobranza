@@ -349,7 +349,7 @@ canvas{max-width:100%}
   </div>
   <div class="card" style="margin-top:14px"><h3>Evolución diaria del listado</h3><div class="sub">Una foto por cada día que publicas el listado (respeta el filtro de cobrador)</div><div class="tw" style="max-height:420px"><table id="tbLsHist"></table></div></div>
   <div class="card" style="margin-top:14px" id="lsSieCard">
-    <h3>Cartera siembra 1-2-3 por cobrador</h3><div class="sub">Clientes cuyo crédito más atrasado está en la cuota 1, 2 o 3 (Nro Vencimiento Final)</div>
+    <h3>Cartera siembra 1-2-3 por cobrador</h3><div class="sub">Clientes con cualquiera de sus créditos en la cuota 1, 2 o 3 (Nro Vencimiento Final)</div>
     <div class="tw"><table id="tbSie"></table></div>
   </div>
 </section>
@@ -562,6 +562,7 @@ function semaforo(p,ritmo){if(ritmo<=0)return 'off';const r=p/ritmo;return r>=1?
 function pcCls(p,ritmo){const s=semaforo(p,ritmo);return s==='off'?'':s;}
 function calBadge(c){return c?`<span class="badge c-${esc(c)}">${esc(c)}</span>`:'';}
 function rodBadge(c){return c?`<span class="badge r-${esc(c)}">${esc(c)}</span>`:'';}
+function SIE(x){return x.sie!=null?x.sie:((x.nro>=1&&x.nro<=3)?x.nro:0);}
 function sieBadge(n){return n>=1&&n<=3?`<span class="badge s${n}">Siembra ${n}</span>`:'';}
 function xlsxDownload(rows,nombre,hoja='Datos'){
   if(!window.XLSX){toast('No cargó la librería de Excel');return;}
@@ -947,7 +948,7 @@ function renderMoraChart(){
 /* =====================================================================
    LISTADO (supervisor y cobrador comparten la lógica)
    ===================================================================== */
-const QVIEWS=[['altos','💰 Montos más altos','Saldo crédito mayor a menor'],['bajos','🪙 Saldos más bajos','Para cancelar rápido'],['siembra','🌱 Siembra 1-2-3','Cuota 1, 2 o 3'],['todos','📋 Todos','']];
+const QVIEWS=[['altos','💰 Montos más altos','Saldo crédito mayor a menor'],['bajos','🪙 Saldos más bajos','Para cancelar rápido'],['siembra','🌱 Siembra 1-2-3','Algún crédito en cuota 1, 2 o 3'],['todos','📋 Todos','']];
 let lsView='altos',lsPage=0,cView='altos',cPage=0;const PAGE=100;
 function qvHtml(cur,fn){return QVIEWS.map(([k,t,s])=>`<button class="${cur===k?'on':''}" onclick="${fn}('${k}')">${t}${s?`<small>${s}</small>`:''}</button>`).join('');}
 function setLsView(k){lsView=k;lsPage=0;renderListado();}
@@ -955,32 +956,33 @@ function setCView(k){cView=k;cPage=0;renderCCartera();}
 function clientesDe(ids){const out=[];const src=(S.rol==='sup'&&S.lsFoto)?S.lsFoto:S.listado;ids.forEach(id=>{const d=src[id];if(d&&d.cl)d.cl.forEach(x=>out.push({...x,cob:id}));});return out;}
 function filtrarVista(arr,view){
   let r=arr;
-  if(view==='siembra')r=r.filter(x=>x.nro>=1&&x.nro<=3).sort((a,b)=>a.nro-b.nro||b.sc-a.sc);
+  if(view==='siembra')r=r.filter(x=>SIE(x)>0).sort((a,b)=>SIE(a)-SIE(b)||b.sc-a.sc);
   else if(view==='bajos')r=r.filter(x=>x.sc>0).sort((a,b)=>a.sc-b.sc);
   else if(view==='altos')r=[...r].sort((a,b)=>b.sc-a.sc);
   else r=[...r].sort((a,b)=>(RANK_CAL[a.cm]??9)-(RANK_CAL[b.cm]??9)||a.nom.localeCompare(b.nom));
   return r;
 }
-function sumHtml(arr){const s1=arr.filter(x=>x.nro===1).length,s2=arr.filter(x=>x.nro===2).length,s3=arr.filter(x=>x.nro===3).length;
-  return `<div class="s">Clientes<b>${fmt(arr.length,0)}</b></div><div class="s">Saldo crédito<b>${m0(arr.reduce((a,x)=>a+x.sc,0))}</b></div><div class="s">Cuota vencida (fecha antigua)<b>${m0(arr.reduce((a,x)=>a+x.cv,0))}</b></div><div class="s">Siembra 1 · 2 · 3<b>${s1} · ${s2} · ${s3}</b></div><div class="s">Deteriora<b>${arr.filter(x=>x.rod==='Deteriora').length}</b></div>`;}
+function sumHtml(arr){const s1=arr.filter(x=>SIE(x)===1).length,s2=arr.filter(x=>SIE(x)===2).length,s3=arr.filter(x=>SIE(x)===3).length;
+  return `<div class="s">Clientes<b>${fmt(arr.length,0)}</b></div><div class="s">Saldo crédito<b>${m0(arr.reduce((a,x)=>a+x.sc,0))}</b></div><div class="s">Cuota vencida (fecha antigua)<b>${m0(arr.reduce((a,x)=>a+x.cv,0))}</b></div><div class="s">Valor cuota (suma)<b>${m0(arr.reduce((a,x)=>a+(x.vc||0),0))}</b></div><div class="s">Siembra 1 · 2 · 3<b>${s1} · ${s2} · ${s3}</b></div><div class="s">Deteriora<b>${arr.filter(x=>x.rod==='Deteriora').length}</b></div>`;}
 function filaCli(x,i,conCob){const w=telWa(x.tel);
-  return `<tr><td class="mut xs">${i}</td><td><div class="b">${esc(x.nom)}</div><div class="xs mut">${esc(x.ced)}${x.nc>1?` · ${x.nc} créditos`:''}${x.ref?' · <span class="badge t-refi">Refinanciado</span>':''}</div></td>
+  return `<tr><td class="mut xs">${i}</td><td><div class="b">${esc(x.nom)}</div><div style="font-size:13.5px;font-weight:700;color:#1e3a8a;margin-top:3px">🪪 ${esc(x.ced)} · 📄 ${x.nc} crédito${x.nc>1?'s':''}${x.ref?' · <span class="badge t-refi">Refinanciado</span>':''}</div></td>
   ${conCob?`<td class="cobn nowrap sm">${esc(COB_BY_ID[x.cob]?.corto||'')}</td>`:''}
-  <td class="nowrap">${calBadge(x.cm)} <span class="mut">→</span> ${calBadge(x.cd)}</td>
-  <td class="num">${x.dias===''?'':x.dias} <div class="xs">${calBadge(x.cr)}</div></td>
+  <td class="center">${calBadge(x.cm)}</td>
+  <td class="center b">${x.dias===''?'':x.dias}</td>
+  <td class="center">${calBadge(x.cr)}</td>
   <td class="nowrap sm">${dmy(x.fvf)}</td>
-  <td class="num">${m$(x.cv)}</td><td class="num b">${m$(x.sc)}</td>
-  <td>${sieBadge(x.nro)}<div class="xs mut">cuota ${x.nro||'—'}</div></td>
+  <td class="num">${m$(x.cv)}</td><td class="num b" style="color:#7c2d12">${m$(x.vc)}</td><td class="num b">${m$(x.sc)}</td>
+  <td class="center"><div class="b" style="font-size:15px">${x.nro||'—'}</div>${sieBadge(SIE(x))}</td>
   <td>${rodBadge(x.rod)}</td>
   <td class="nowrap">${w?`<a class="wa-i" target="_blank" rel="noopener" href="https://wa.me/${w}" title="WhatsApp ${esc(x.tel)}">💬</a> <a class="tel-i" href="tel:${esc(x.tel)}" title="Llamar">📞</a>`:'<span class="xs mut">sin cel.</span>'}</td></tr>`;}
-function cardCli(x){const w=telWa(x.tel);return `<div style="display:flex;justify-content:space-between;gap:8px"><div style="min-width:0"><div class="b">${esc(x.nom)}</div><div class="xs mut">${esc(x.ced)} · venc. ${dmy(x.fvf)} · ${x.dias} días</div></div><div class="right"><div class="b">${m$(x.sc)}</div><div class="xs mut">vencido ${m$(x.cv)}</div></div></div>
-  <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px">${calBadge(x.cm)}<span class="mut">→</span>${calBadge(x.cr)} ${sieBadge(x.nro)} ${rodBadge(x.rod)}${x.ref?' <span class="badge t-refi">Refinanciado</span>':''}<span style="margin-left:auto">${w?`<a class="wa-i" target="_blank" rel="noopener" href="https://wa.me/${w}">💬</a> <a class="tel-i" href="tel:${esc(x.tel)}">📞</a>`:''}</span></div>`;}
-function thCli(conCob){return `<thead><tr><th>#</th><th>Cliente</th>${conCob?'<th>Cobrador</th>':''}<th>Cal. mens → diaria</th><th class="num">Días / real</th><th>Venc. más antiguo</th><th class="num">Cuota vencida</th><th class="num">Saldo crédito</th><th>Siembra</th><th>Rodamiento</th><th>Contacto</th></tr></thead>`;}
+function cardCli(x){const w=telWa(x.tel);return `<div style="display:flex;justify-content:space-between;gap:8px"><div style="min-width:0"><div class="b">${esc(x.nom)}</div><div style="font-size:13px;font-weight:700;color:#1e3a8a">🪪 ${esc(x.ced)} · 📄 ${x.nc} crédito${x.nc>1?'s':''}</div><div class="xs mut">venc. ${dmy(x.fvf)} · ${x.dias} días</div></div><div class="right"><div class="b">${m$(x.sc)}</div><div class="xs mut">vencido ${m$(x.cv)}</div><div class="xs b" style="color:#7c2d12">valor cuota ${m$(x.vc)}</div></div></div>
+  <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px"><span class="xs mut">Mensual</span>${calBadge(x.cm)}<span class="xs mut">Rodam.</span>${calBadge(x.cr)} ${sieBadge(SIE(x))} ${rodBadge(x.rod)}${x.ref?' <span class="badge t-refi">Refinanciado</span>':''}<span style="margin-left:auto">${w?`<a class="wa-i" target="_blank" rel="noopener" href="https://wa.me/${w}">💬</a> <a class="tel-i" href="tel:${esc(x.tel)}">📞</a>`:''}</span></div>`;}
+function thCli(conCob){return `<thead><tr><th>#</th><th>Cliente</th>${conCob?'<th>Cobrador</th>':''}<th class="center">Cal. mensual</th><th class="center">Días</th><th class="center">Calif. Rodam.</th><th>Venc. más antiguo</th><th class="num">Cuota vencida</th><th class="num">Valor cuota</th><th class="num">Saldo crédito</th><th class="center">Cuota más vencida</th><th>Rodamiento</th><th>Contacto</th></tr></thead>`;}
 function pager(id,total,page,fn){const pages=Math.ceil(total/PAGE);if(pages<=1){$(id).innerHTML='';return;}
   $(id).innerHTML=`<span class="mut">${page*PAGE+1}–${Math.min(total,(page+1)*PAGE)} de ${fmt(total,0)}</span><button class="btn ghost sm" ${page<=0?'disabled':''} onclick="${fn}(${page-1})">‹</button><button class="btn ghost sm" ${page>=pages-1?'disabled':''} onclick="${fn}(${page+1})">›</button>`;}
 function lsGo(p){lsPage=p;renderListado();}function cGo(p){cPage=p;renderCCartera();}
 function aplicaFiltros(arr,q,cal,rod,sie){q=(q||'').trim().toUpperCase();
-  return arr.filter(x=>(!q||x.nom.toUpperCase().includes(q)||String(x.ced).includes(q))&&(!cal||x.cm===cal)&&(!rod||x.rod===rod)&&(!sie||(sie==='S'?(x.nro>=1&&x.nro<=3):x.nro===+sie)));}
+  return arr.filter(x=>(!q||x.nom.toUpperCase().includes(q)||String(x.ced).includes(q))&&(!cal||x.cm===cal)&&(!rod||x.rod===rod)&&(!sie||(sie==='S'?SIE(x)>0:SIE(x)===+sie)));}
 async function cambiarFoto(f){lsPage=0;if(!f){S.lsFoto=null;renderListado();return;}
   $('lsSub').textContent='Cargando foto del '+dmy(f)+'…';const o={};
   const docs=await Promise.all(COBS.map(c=>DB.get('listadohist/'+f+'__'+c.id).catch(()=>null)));
@@ -1000,15 +1002,15 @@ function renderListado(){
   arr=aplicaFiltros(arr,$('lsQ').value,$('lsCal').value,$('lsRod').value,$('lsSie').value);
   arr=filtrarVista(arr,lsView);window._lsArr=arr;
   $('lsSum').innerHTML=sumHtml(arr);
-  $('tbLs').innerHTML=thCli(true)+'<tbody>'+(arr.length?arr.slice(lsPage*PAGE,(lsPage+1)*PAGE).map((x,i)=>filaCli(x,lsPage*PAGE+i+1,true)).join(''):'<tr><td colspan="11" class="center mut" style="padding:28px">Sin clientes para mostrar</td></tr>')+'</tbody>';
+  $('tbLs').innerHTML=thCli(true)+'<tbody>'+(arr.length?arr.slice(lsPage*PAGE,(lsPage+1)*PAGE).map((x,i)=>filaCli(x,lsPage*PAGE+i+1,true)).join(''):'<tr><td colspan="13" class="center mut" style="padding:28px">Sin clientes para mostrar</td></tr>')+'</tbody>';
   pager('lsPager',arr.length,lsPage,'lsGo');
   // siembra por cobrador
   const all=clientesDe(COBS.map(c=>c.id));
   $('tbSie').innerHTML='<thead><tr><th>Cobrador</th><th class="num">Clientes</th><th class="num">Siembra 1</th><th class="num">Siembra 2</th><th class="num">Siembra 3</th><th class="num">Total siembra</th><th class="num">Saldo siembra</th><th class="num">% clientes</th></tr></thead><tbody>'+
-    COBS.map(c=>{const a=all.filter(x=>x.cob===c.id),s=a.filter(x=>x.nro>=1&&x.nro<=3);const n=k=>s.filter(x=>x.nro===k).length;
+    COBS.map(c=>{const a=all.filter(x=>x.cob===c.id),s=a.filter(x=>SIE(x)>0);const n=k=>s.filter(x=>SIE(x)===k).length;
       return `<tr><td class="cobn">${esc(c.corto)}</td><td class="num">${a.length}</td><td class="num">${n(1)}</td><td class="num">${n(2)}</td><td class="num">${n(3)}</td><td class="num b">${s.length}</td><td class="num">${m0(s.reduce((t,x)=>t+x.sc,0))}</td><td class="num">${pctTxt(a.length?s.length/a.length:0)}</td></tr>`;}).join('')+'</tbody>';
 }
-function rowsExport(arr){return arr.map(x=>({Cliente:x.nom,'Cédula':x.ced,'Teléfono':x.tel,'Dirección':x.dir,Zona:x.zona,Cobrador:COB_BY_ID[x.cob]?.corto||'','Calificación Mensual':x.cm,'Calificación Diaria':x.cd,'Días (HOY)':x.dias,'Calificación Real Afectación':x.cr,'Fecha Venc. Inicial':dmy(x.fvi),'Fecha Venc. Final más antigua':dmy(x.fvf),'Cuota vencida':x.cv,'Saldo Crédito Final':x.sc,'Valor Cuota':x.vc,'Nro Vencimiento Final':x.nro,'Siembra':x.nro>=1&&x.nro<=3?'Siembra '+x.nro:'','Rodamiento':x.rod,'Créditos':x.nc,'Refinanciado':x.ref?'Sí':''}));}
+function rowsExport(arr){return arr.map(x=>({Cliente:x.nom,'Cédula':x.ced,'Teléfono':x.tel,'Dirección':x.dir,Zona:x.zona,Cobrador:COB_BY_ID[x.cob]?.corto||'','Calificación Mensual':x.cm,'Calificación Diaria':x.cd,'Días (HOY)':x.dias,'Calificación Real Afectación':x.cr,'Fecha Venc. Inicial':dmy(x.fvi),'Fecha Venc. Final más antigua':dmy(x.fvf),'Cuota vencida':x.cv,'Saldo Crédito Final':x.sc,'Valor Cuota':x.vc,'Cuota más vencida':x.nro,'Siembra':SIE(x)?'Siembra '+SIE(x):'','Rodamiento':x.rod,'Créditos':x.nc,'Refinanciado':x.ref?'Sí':''}));}
 function exportListado(){xlsxDownload(rowsExport(window._lsArr||[]),`Listado_Cartera_${lsView}_${hoyYMD()}.xlsx`,'Listado');}
 
 /* =====================================================================
@@ -1089,10 +1091,10 @@ function procesarListado(){
     const oriC=o=>/refinanc/i.test(o)?'Refinanc.':/seguro/i.test(o)?'Seguro':/factur/i.test(o)?'Facturación':(o||'');
     const creds=c.rows.map(r=>({cc:String(r['Cod Credito']??'').trim(),s:+num(r['Saldo Crédito Final']).toFixed(2),o:oriC(String(r['Origen Factura']||'')),n:Math.round(num(r['Nro Vencimiento Final']))||0,f:ymdUTC(r._fvf),l:String(r['Línea Producto']||'').trim()})).sort((a,b)=>b.s-a.s);
     porCob[c.cob].push({cod:c.cod,nom:c.nom,ced:c.ced,tel:c.tel,dir:c.dir,zona:c.zona,cm:c.cm,cd:c.cd,dias,cr,fvi:ymdUTC(c.minI),fvf:ymdUTC(c.minF),
-      cv:+cv.toFixed(2),sc:+sc.toFixed(2),vc:+vc.toFixed(2),nro:nro||0,rod:catRod(c.cm,cr),nc:c.rows.length,ref,creds});});
+      cv:+cv.toFixed(2),sc:+sc.toFixed(2),vc:+vc.toFixed(2),nro:nro||0,sie:(()=>{let m=0;c.rows.forEach(r=>{const n=Math.round(num(r['Nro Vencimiento Final']));if(n>=1&&n<=3&&(!m||n<m))m=n;});return m;})(),rod:catRod(c.cm,cr),nc:c.rows.length,ref,creds});});
   const presentes=COBS.filter(c=>LS_RAW.some(r=>cobDe(r['Nombre Cobrador Actual'])===c)).map(c=>c.id);
   filas-=dupl;LS_OUT={dupl,porCob,filas,clientes:Object.keys(cl).length,corte:ymdUTC(new Date(corte)),presentes};
-  const sie=Object.values(porCob).flat().filter(x=>x.nro>=1&&x.nro<=3).length;
+  const sie=Object.values(porCob).flat().filter(x=>SIE(x)>0).length;
   $('lsRes').innerHTML=`<div class="info">${dupl?`⚠️ El archivo trae <b>${fmt(dupl,0)}</b> filas repetidas del mismo crédito; se cuentan una sola vez.<br>`:''}<b>${fmt(filas,0)}</b> créditos después de filtros → <b>${fmt(LS_OUT.clientes,0)}</b> clientes de ${COBS.length-faltan.size} cobradores · siembra 1-2-3: <b>${sie}</b>`+
     (presentes.length<COBS.length?`<br>ℹ️ El archivo trae solo ${presentes.length} cobrador(es): <b>${presentes.map(i=>COB_BY_ID[i].corto).join(', ')}</b>. Solo se actualizará su listado; los demás <b>se mantienen como están</b>.`:(faltan.size?`<br>⚠️ Sin filas después de filtros: ${[...faltan].map(i=>COB_BY_ID[i].corto).join(', ')}`:''))+`</div><button class="btn gold block" style="margin-top:10px" onclick="publicarListado(this)">🚀 Publicar listado en línea</button>`;
 }
@@ -1106,7 +1108,7 @@ async function publicarListado(b){if(!LS_OUT)return;if(b)b.disabled=true;
     const fecha=$('lsFecha')?.value||hoyYMD();const prevRes=(S.lsHist.find(h=>h.id===fecha)||{}).cobs||{};const res={...prevRes};
     await Promise.all(P.map(c=>DB.set('listadohist/'+fecha+'__'+c.id,{cl:LS_OUT.porCob[c.id],fecha,cob:c.id,ts,corte:LS_OUT.corte}).then(paso)));
     for(const c of P){const a=LS_OUT.porCob[c.id];
-      res[c.id]={n:a.length,sc:+a.reduce((t,x)=>t+x.sc,0).toFixed(2),cv:+a.reduce((t,x)=>t+x.cv,0).toFixed(2),s1:a.filter(x=>x.nro===1).length,s2:a.filter(x=>x.nro===2).length,s3:a.filter(x=>x.nro===3).length,
+      res[c.id]={n:a.length,sc:+a.reduce((t,x)=>t+x.sc,0).toFixed(2),cv:+a.reduce((t,x)=>t+x.cv,0).toFixed(2),s1:a.filter(x=>SIE(x)===1).length,s2:a.filter(x=>SIE(x)===2).length,s3:a.filter(x=>SIE(x)===3).length,
         mej:a.filter(x=>x.rod==='Mejora').length,man:a.filter(x=>x.rod==='Mantiene').length,det:a.filter(x=>x.rod==='Deteriora').length};}
     await DB.set('listadoresumen/'+fecha,{fecha,cobs:res,ts});{const i=S.lsHist.findIndex(h=>h.id===fecha);const d={id:fecha,fecha,cobs:res};i>=0?S.lsHist[i]=d:S.lsHist.push(d);S.lsHist.sort((a,b)=>a.id.localeCompare(b.id));}
     let extra='';
@@ -1281,7 +1283,7 @@ function renderCInicio(){
     <div class="mini" style="margin-top:12px"><b>Refinanc. a la fecha</b><span>${m$(sv.refi)} / ${m0(msf)}</span></div><div class="bar g"><i style="width:${Math.min(100,msf?sv.refi/msf*100:0)}%"></i></div>
     <div class="mini" style="margin-top:12px"><span>Hoy registraste</span><b>${m$(ag.retHoy+ag.refiHoy)}</b></div>`;
   const [d1,d2]=rangoMes(mes);const rr=refisDe(id,d1,d2),rm=rr.reduce((a,x)=>a+x.saldo,0);
-  const cl=(S.listado[id]?.cl)||[];const sie=cl.filter(x=>x.nro>=1&&x.nro<=3).length;
+  const cl=(S.listado[id]?.cl)||[];const sie=cl.filter(x=>SIE(x)>0).length;
   $('cSistema').innerHTML=`<h3>Refinanc. a la fecha</h3><div class="sub">Refinanciamientos con Fecha Crédito en ${MESES[+mes.slice(5)-1]}</div>
     <div style="display:flex;gap:18px;flex-wrap:wrap"><div><div class="kpi" style="--accent:transparent"><div class="vl" style="margin:0">${rr.length}</div></div><div class="xs mut">refinanciamientos</div></div><div><div class="kpi" style="--accent:transparent"><div class="vl" style="margin:0">${m0(rm)}</div></div><div class="xs mut">saldo crédito final · ${pctTxt(m.fm?rm/m.fm:0,0)} de la meta</div></div></div>
     <div class="mini" style="margin-top:12px"><span>Clientes en tu listado</span><b>${cl.length}</b></div><div class="mini"><span>Cartera siembra 1-2-3</span><b>${sie}</b></div>
@@ -1291,7 +1293,7 @@ function renderCInicio(){
 }
 let tipoReg='retiro',cliSel=null;
 function setTipo(t){tipoReg='retiro';$('tpR').classList.toggle('on',t==='retiro');$('tpF').classList.toggle('on',t==='refi');}
-function calInfo(x){return `<span class="xs mut">Mensual</span> ${calBadge(x.cm)} <span class="xs mut">Rodamiento</span> ${calBadge(x.cr)} ${rodBadge(x.rod)} ${sieBadge(x.nro)}`;}
+function calInfo(x){return `<span class="xs mut">Mensual</span> ${calBadge(x.cm)} <span class="xs mut">Rodamiento</span> ${calBadge(x.cr)} ${rodBadge(x.rod)} ${sieBadge(SIE(x))}`;}
 function buscarCli(){const q=$('rgCliQ').value.trim().toUpperCase();
   const cl=(S.listado[S.cob]?.cl)||[];
   if(!cl.length){$('rgCliRes').innerHTML='<div class="xs mut" style="margin-top:6px">Tu supervisor aún no publica tu listado de clientes.</div>';return;}
@@ -1338,7 +1340,7 @@ function renderCCartera(){
   $('cSum').innerHTML=sumHtml(arr);
   const pg=arr.slice(cPage*PAGE,(cPage+1)*PAGE);
   if(window.innerWidth<700){$('tbC').innerHTML='<tbody>'+(pg.length?pg.map(x=>`<tr><td>${cardCli(x)}</td></tr>`).join(''):'<tr><td class="center mut" style="padding:28px">Sin clientes para mostrar</td></tr>')+'</tbody>';}
-  else $('tbC').innerHTML=thCli(false)+'<tbody>'+(pg.length?pg.map((x,i)=>filaCli(x,cPage*PAGE+i+1,false)).join(''):'<tr><td colspan="10" class="center mut" style="padding:28px">Sin clientes para mostrar</td></tr>')+'</tbody>';
+  else $('tbC').innerHTML=thCli(false)+'<tbody>'+(pg.length?pg.map((x,i)=>filaCli(x,cPage*PAGE+i+1,false)).join(''):'<tr><td colspan="12" class="center mut" style="padding:28px">Sin clientes para mostrar</td></tr>')+'</tbody>';
   pager('cPager',arr.length,cPage,'cGo');
 }
 function renderCMora(){
