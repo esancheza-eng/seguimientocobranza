@@ -313,6 +313,23 @@ canvas{max-width:100%}
   </div>
 </section>
 
+<section class="sec" id="s-cobro">
+  <div class="card">
+    <div class="ch"><div><h3>Cobro efectivo del mes</h3><div class="sub">Acumulado del mes por cobrador (Cobro_Efectivo_por_Cobrador). El cobro de cada día es la diferencia con el corte anterior.</div></div>
+      <div class="fbar" style="margin:0"><label class="sm b">Corte</label><select id="ceFecha" class="inp" onchange="renderCobro()"></select></div></div>
+    <div class="grid g4" id="ceKpis"></div>
+  </div>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card"><h3>Cobro por cobrador</h3><div class="sub">Acumulado del mes por estado: Contiene · Deteriora · Libera</div><div class="chartbox" style="height:400px"><canvas id="chCe"></canvas></div></div>
+    <div class="card"><h3>Cobro diario de la zona</h3><div class="sub">Lo cobrado entre cada corte y el acumulado del mes</div><div class="chartbox" style="height:400px"><canvas id="chCeDia"></canvas></div></div>
+  </div>
+  <div class="card" style="margin-top:14px">
+    <div class="ch"><div><h3>Detalle por cobrador</h3><div class="sub" id="ceSub"></div></div><button class="btn ghost sm" onclick="exportCobro()">⬇ Excel</button></div>
+    <div class="tw"><table id="tbCe"></table></div>
+  </div>
+  <div class="card" style="margin-top:14px"><h3>Cobro por día y cobrador</h3><div class="sub">Lo cobrado entre cortes (total del día)</div><div class="tw"><table id="tbCeDia"></table></div></div>
+</section>
+
 <section class="sec" id="s-listado">
   <div class="card">
     <div class="ch"><div><h3>Listado de cartera en línea</h3><div class="sub" id="lsSub">Sube el Detalle por Clientes en "Cargar datos".</div></div>
@@ -352,7 +369,7 @@ canvas{max-width:100%}
 </section>
 
 <section class="sec" id="s-cargar">
-  <div class="grid g3">
+  <div class="grid g4">
     <div class="card">
       <h3>1 · Listado de cartera</h3><div class="sub">Detalle por Clientes completo. Se procesa con las reglas del rodamiento (agrupado por cliente, fecha de corte = último día del mes).</div>
       <div class="drop" id="dpLs" onclick="pick('fLs')"><div class="big">📄</div><b>Arrastra o toca para subir</b><div class="sm mut">Detalle_por_Clientes.xlsx</div></div>
@@ -372,6 +389,12 @@ canvas{max-width:100%}
       <input type="file" id="fMo" accept=".xlsx,.xls,.csv" class="hidden" onchange="leerMora(this.files[0])">
       <div id="moRes"></div>
     </div>
+    <div class="card">
+      <h3>4 · Cobro efectivo</h3><div class="sub">Cobro_Efectivo_por_Cobrador (acumulado del mes). Cada carga se guarda como el corte del día; de un corte al siguiente se calcula lo cobrado ese día.</div>
+      <div class="drop" id="dpCe" onclick="pick('fCe')"><div class="big">💵</div><b>Arrastra o toca para subir</b><div class="sm mut">Cobro_Efectivo_por_Cobrador.xlsx</div></div>
+      <input type="file" id="fCe" accept=".xlsx,.xls,.csv" class="hidden" onchange="leerCobro(this.files[0])">
+      <div id="ceRes"></div>
+    </div>
   </div>
   <div class="card" style="margin-top:14px"><h3>Última actualización</h3><div id="estadoCargas" class="sm"></div></div>
 </section>
@@ -387,6 +410,7 @@ canvas{max-width:100%}
 <!-- ======== COBRADOR ======== -->
 <section class="sec" id="c-inicio">
   <div class="card" id="cSistema" style="margin-bottom:14px;border-left:5px solid var(--gold)"></div>
+  <div class="card" id="cCobro" style="margin-bottom:14px;border-left:5px solid var(--ok)"></div>
   <div class="cob-hero" id="cHero"></div>
   <div class="card" id="cSemana" style="margin-top:14px"></div>
   <div class="card" style="margin-top:14px"><div class="ch"><div><h3>Mis registros del mes</h3><div class="sub">Puedes borrar un registro equivocado durante las primeras 24 horas</div></div><button class="btn gold sm" onclick="goTab('c-registrar')">➕ Registrar</button></div><div id="cRegs"></div></div>
@@ -586,7 +610,7 @@ const DB={
 /* =====================================================================
    ESTADO Y SESIÓN
    ===================================================================== */
-const S={lsHist:[],refisHist:[],lsFoto:null,rol:null,cob:null,email:'',mes:hoyYMD().slice(0,7),metas:null,regs:[],listado:{},refis:{},mora:[],estado:{},equipo:{},unsub:[]};
+const S={cobro:[],cobroCob:{},lsHist:[],refisHist:[],lsFoto:null,rol:null,cob:null,email:'',mes:hoyYMD().slice(0,7),metas:null,regs:[],listado:{},refis:{},mora:[],estado:{},equipo:{},unsub:[]};
 function metasDefault(){const o={};COBS.forEach(c=>o[c.id]={rm:c.rm,fm:c.fm});return o;}
 function metaDe(id){const m=(S.metas&&S.metas[id])||metasDefault()[id]||{rm:0,fm:0};return {rm:+m.rm||0,fm:+m.fm||0};}
 
@@ -640,13 +664,13 @@ function boot(){
 /* =====================================================================
    NAVEGACIÓN
    ===================================================================== */
-const TABS_SUP=[['s-resumen','📊 Resumen'],['s-metas','🎯 Metas y semanas'],['s-refis','🔁 Refinanciamientos'],['s-mora','📈 Mora proyectada'],['s-listado','📋 Listado'],['s-registros','🧾 Registros'],['s-cargar','⬆️ Cargar datos'],['s-equipo','👥 Equipo']];
+const TABS_SUP=[['s-resumen','📊 Resumen'],['s-metas','🎯 Metas y semanas'],['s-refis','🔁 Refinanciamientos'],['s-mora','📈 Mora proyectada'],['s-cobro','💵 Cobro efectivo'],['s-listado','📋 Listado'],['s-registros','🧾 Registros'],['s-cargar','⬆️ Cargar datos'],['s-equipo','👥 Equipo']];
 const TABS_COB=[['c-inicio','🏠 Mi avance'],['c-registrar','➕ Registrar'],['c-cartera','📋 Mi cartera'],['c-mora','📈 Mi mora']];
 let tabActual='';
 function goTab(id){tabActual=id;document.querySelectorAll('.sec').forEach(s=>s.classList.toggle('on',s.id===id));
   document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===id));window.scrollTo({top:0});renderTab(id);}
 function renderTab(id){
-  const f={'s-resumen':renderResumen,'s-metas':renderMetas,'s-refis':renderRefis,'s-mora':renderMora,'s-listado':renderListado,'s-registros':renderRegs,'s-cargar':renderEstado,'s-equipo':renderEquipo,
+  const f={'s-resumen':renderResumen,'s-metas':renderMetas,'s-refis':renderRefis,'s-mora':renderMora,'s-cobro':renderCobro,'s-listado':renderListado,'s-registros':renderRegs,'s-cargar':renderEstado,'s-equipo':renderEquipo,
     'c-inicio':renderCInicio,'c-registrar':()=>{},'c-cartera':renderCCartera,'c-mora':renderCMora}[id];
   try{f&&f();}catch(e){console.error(e);}
 }
@@ -679,7 +703,8 @@ async function cambiarMes(m){S.mes=m;S.unsub.forEach(f=>{try{f()}catch(e){}});S.
 async function cargarSup(){
   S.unsub.push(DB.listen('metas',[],docs=>{const d=docs.find(x=>x.id===S.mes);S.metas=d?d.cobs:null;if(['s-resumen','s-metas'].includes(tabActual))renderTab(tabActual);}));
   S.unsub.push(DB.listen('registros',[['mes','==',S.mes]],docs=>{S.regs=docs;if(['s-resumen','s-metas','s-registros'].includes(tabActual))renderTab(tabActual);}));
-  const [ls,rf,mo,es,eq,lh,rh]=await Promise.all([DB.list('listado'),DB.list('refis'),DB.list('mora'),DB.get('config/estado'),DB.list('equipo'),DB.list('listadoresumen'),DB.list('refishist')]).catch(e=>{console.error(e);return [[],[],[],null,[],[],[]];});
+  const [ls,rf,mo,es,eq,lh,rh,ce]=await Promise.all([DB.list('listado'),DB.list('refis'),DB.list('mora'),DB.get('config/estado'),DB.list('equipo'),DB.list('listadoresumen'),DB.list('refishist'),DB.list('cobro')]).catch(e=>{console.error(e);return [[],[],[],null,[],[],[],[]];});
+  S.cobro=(ce||[]).sort((a,b)=>a.id.localeCompare(b.id));
   S.lsHist=(lh||[]).sort((a,b)=>a.id.localeCompare(b.id));S.refisHist=(rh||[]).sort((a,b)=>a.id.localeCompare(b.id));
   S.listado={};ls.forEach(d=>S.listado[d.id]=d);
   S.refis={};rf.forEach(d=>S.refis[d.id]=d.items||[]);
@@ -690,7 +715,8 @@ async function cargarCob(){
   const id=S.cob;
   S.unsub.push(DB.listen('metas',[],docs=>{const d=docs.find(x=>x.id===S.mes);S.metas=d?d.cobs:null;if(tabActual==='c-inicio')renderCInicio();}));
   S.unsub.push(DB.listen('registros',[['cob','==',id],['mes','==',S.mes]],docs=>{S.regs=docs;if(tabActual==='c-inicio')renderCInicio();}));
-  const [ls,rf,mo]=await Promise.all([DB.get('listado/'+id),DB.get('refis/'+id),DB.get('moracob/'+id)]).catch(e=>{console.error(e);return [null,null,null];});
+  const [ls,rf,mo,ce]=await Promise.all([DB.get('listado/'+id),DB.get('refis/'+id),DB.get('moracob/'+id),DB.get('cobrocob/'+id)]).catch(e=>{console.error(e);return [null,null,null,null];});
+  S.cobroCob=ce&&ce.dias?ce.dias:{};
   S.listado={};if(ls)S.listado[id]=ls;
   S.refis={};S.refis[id]=(rf&&rf.items)||[];
   S.moraCob=mo&&mo.dias?mo.dias:{};
@@ -751,17 +777,17 @@ function renderResumen(){
     let pl=null,pct=null;if(mt&&mt.si){pl=(mt.sl+mt.sr)/mt.si;pct=pl+mt.sc/mt.si;}
     return {c,m,a,pr,pf,ps,rfn:rr.length,rfm,psr,psf,glob,pl,pct};});
   rows.sort((x,y)=>y.glob-x.glob);
-  const th=`<thead><tr><th>#</th><th>Cobrador</th><th class="num">Retiros</th><th class="num">Meta</th><th class="num">%</th><th class="num">Refinanc. sistema</th><th class="num">Cant.</th><th class="num">Meta</th><th class="num">%</th><th class="num">Semana ${sw+1} ret / refi</th><th class="num">Hoy</th><th class="num">% Libera</th><th class="num">% Cont. total</th><th>Estado</th></tr></thead>`;
+  const th=`<thead><tr><th>#</th><th>Cobrador</th><th class="num">Retiros</th><th class="num">Meta</th><th class="num">%</th><th class="num">Refinanc. sistema</th><th class="num">Cant.</th><th class="num">Meta</th><th class="num">%</th><th class="num">Semana ${sw+1} ret / refi</th><th class="num">Hoy</th><th class="num">Cobro efectivo</th><th class="num">% Libera</th><th class="num">% Cont. total</th><th>Estado</th></tr></thead>`;
   const tb=rows.map((r,i)=>{const sem=semaforo(r.glob,ritmo);const hoy=r.a.retHoy+r.a.refiHoy;
     return `<tr><td>${i+1}</td><td class="cobn nowrap">${esc(r.c.corto)}</td>
     <td class="num">${m$(r.a.ret)}</td><td class="num mut">${m0(r.m.rm)}</td><td class="num"><span class="pc ${pcCls(r.pr,ritmo)}">${pctTxt(r.pr,0)}</span></td>
     <td class="num">${m$(r.a.refi)}</td><td class="num">${r.rfn}</td><td class="num mut">${m0(r.m.fm)}</td><td class="num"><span class="pc ${pcCls(r.pf,ritmo)}">${pctTxt(r.pf,0)}</span></td>
     <td class="num"><span class="pc ${pcCls(r.psr,ritSem)}">${pctTxt(r.psr,0)}</span> / <span class="pc ${pcCls(r.psf,ritSem)}">${pctTxt(r.psf,0)}</span></td>
     <td class="num">${hoy?m0(hoy):'<span class="mut sm">—</span>'}</td>
-    <td class="num">${pctTxt(r.pl,2)}</td><td class="num b">${pctTxt(r.pct,2)}</td>
+    <td class="num">${(()=>{const f=ceFila(cobroUlt(mes),r.c.id);return f?m0(f.t):'—';})()}</td><td class="num">${pctTxt(r.pl,2)}</td><td class="num b">${pctTxt(r.pct,2)}</td>
     <td><span class="dot ${sem}"></span></td></tr>`;}).join('');
   const T=rows.reduce((t,r)=>{t.ret+=r.a.ret;t.rm+=r.m.rm;t.refi+=r.a.refi;t.fm+=r.m.fm;t.rfn+=r.rfn;t.rfm+=r.rfm;t.hoy+=r.a.retHoy+r.a.refiHoy;return t;},{ret:0,rm:0,refi:0,fm:0,rfn:0,rfm:0,hoy:0});
-  const tf=`<tfoot><tr><td></td><td>Zona Milagro</td><td class="num">${m$(T.ret)}</td><td class="num">${m0(T.rm)}</td><td class="num">${pctTxt(T.rm?T.ret/T.rm:0,0)}</td><td class="num">${m$(T.refi)}</td><td class="num">${T.rfn}</td><td class="num">${m0(T.fm)}</td><td class="num">${pctTxt(T.fm?T.refi/T.fm:0,0)}</td><td></td><td class="num">${m0(T.hoy)}</td><td class="num">${z?pctTxt(z.pl,2):'—'}</td><td class="num">${z?pctTxt(z.pct,2):'—'}</td><td></td></tr></tfoot>`;
+  const tf=`<tfoot><tr><td></td><td>Zona Milagro</td><td class="num">${m$(T.ret)}</td><td class="num">${m0(T.rm)}</td><td class="num">${pctTxt(T.rm?T.ret/T.rm:0,0)}</td><td class="num">${m$(T.refi)}</td><td class="num">${T.rfn}</td><td class="num">${m0(T.fm)}</td><td class="num">${pctTxt(T.fm?T.refi/T.fm:0,0)}</td><td></td><td class="num">${m0(T.hoy)}</td><td class="num">${cobroUlt(mes)?m0(ceTot(cobroUlt(mes)).t):'—'}</td><td class="num">${z?pctTxt(z.pl,2):'—'}</td><td class="num">${z?pctTxt(z.pct,2):'—'}</td><td></td></tr></tfoot>`;
   $('tbRank').innerHTML=th+'<tbody>'+tb+'</tbody>'+tf;
   window._rankRows=rows;
   // gráfico diario
@@ -775,7 +801,7 @@ function renderResumen(){
     {type:'line',label:'Ritmo esperado',data:rs.map(()=>+(ritmo*100).toFixed(1)),borderColor:'#0a1f44',borderDash:[6,4],pointRadius:0,borderWidth:2}]},
     options:{indexAxis:'y',maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmt(c.raw,1)+'%'}}},scales:{x:{ticks:{callback:v=>v+'%'},suggestedMax:100},y:{grid:{display:false},ticks:{autoSkip:false,font:{size:11}}}}}});
 }
-function exportRanking(){const r=(window._rankRows||[]).map(x=>({Cobrador:x.c.corto,'Retiros $':+x.a.ret.toFixed(2),'Meta retiros':x.m.rm,'% retiros':+(x.pr*100).toFixed(1),'Refinanciamiento sistema $':+x.a.refi.toFixed(2),'Cant. refinanc.':x.rfn,'Meta refinanc.':x.m.fm,'% refinanc.':+(x.pf*100).toFixed(1),'% Libera':x.pl!=null?+(x.pl*100).toFixed(2):'','% Contiene total':x.pct!=null?+(x.pct*100).toFixed(2):''}));
+function exportRanking(){const r=(window._rankRows||[]).map(x=>({Cobrador:x.c.corto,'Retiros $':+x.a.ret.toFixed(2),'Meta retiros':x.m.rm,'% retiros':+(x.pr*100).toFixed(1),'Refinanciamiento sistema $':+x.a.refi.toFixed(2),'Cant. refinanc.':x.rfn,'Meta refinanc.':x.m.fm,'% refinanc.':+(x.pf*100).toFixed(1),'Cobro efectivo':(ceFila(cobroUlt(S.mes),x.c.id)||{}).t??'','% Libera':x.pl!=null?+(x.pl*100).toFixed(2):'','% Contiene total':x.pct!=null?+(x.pct*100).toFixed(2):''}));
   xlsxDownload(r,`Tablero_Cobranza_${S.mes}.xlsx`,'Tablero');}
 
 /* =====================================================================
@@ -818,7 +844,7 @@ function initSupControles(){
   ['rfCob','lsCob','rgCob'].forEach(i=>$(i).innerHTML=opts);
   $('moCobChart').innerHTML='<option value="">Zona Milagro (total)</option>'+COBS.map(c=>`<option value="${c.id}">${esc(c.corto)}</option>`).join('');
   $('lsCal').innerHTML='<option value="">Calificación: todas</option>'+CAL_ORDER.map(c=>`<option>${c}</option>`).join('');
-  ['dpLs','dpRf','dpMo'].forEach((id,i)=>{const el=$(id),fn=[leerListado,leerRefis,leerMora][i];
+  ['dpLs','dpRf','dpMo','dpCe'].forEach((id,i)=>{const el=$(id),fn=[leerListado,leerRefis,leerMora,leerCobro][i];
     el.addEventListener('dragover',e=>{e.preventDefault();el.classList.add('ov');});el.addEventListener('dragleave',()=>el.classList.remove('ov'));
     el.addEventListener('drop',e=>{e.preventDefault();el.classList.remove('ov');const f=e.dataTransfer.files[0];if(f)fn(f);});});
 }
@@ -1139,8 +1165,64 @@ async function publicarMora(b){const f=$('moFechaCarga').value;if(!f)return toas
     const est={mora:{ts:Date.now(),ultima:S.mora[S.mora.length-1].id,cortes:S.mora.length}};await DB.set('config/estado',est,true);Object.assign(S.estado,est);
     toast('✅ Corte '+dmy(f)+' guardado');$('moRes').innerHTML+=`<div class="okbox">✅ Corte ${dmy(f)} guardado. Ya son ${S.mora.length} corte(s).</div>`;renderEstado();
   }catch(e){console.error(e);toast('No se pudo guardar');b.disabled=false;}}
+/* ---- 4. Cobro efectivo ---- */
+let CE_TMP=null;
+async function leerCobro(file){if(!file)return;$('ceRes').innerHTML='<div class="info">Leyendo archivo…</div>';
+  try{const aoa=await leerXlsx(file);const norm=v=>String(v??'').trim();
+    const hi=aoa.findIndex(r=>norm(r[0]).toUpperCase()==='NOMBRE COBRADOR');if(hi<0)throw new Error('No encuentro la columna "NOMBRE COBRADOR". ¿Es el Cobro_Efectivo_por_Cobrador?');
+    const est=(aoa[hi-1]||[]).map(v=>norm(v).toLowerCase());const col=k=>est.findIndex(e=>e===k);
+    const ic=col('contiene'),id=col('deteriora'),il=col('libera'),it=col('total');
+    if(it<0)throw new Error('No encuentro la columna Total del cobro efectivo.');
+    const filas=[];const fuera=[];
+    aoa.slice(hi+1).forEach(r=>{const nm=norm(r[0]);if(!nm||/^total$/i.test(nm)||/^filtros/i.test(nm))return;const cob=cobDe(nm);if(!cob){fuera.push(nm);return;}
+      const v=i=>i>=0?num(r[i]):0;filas.push({cob:cob.id,c:+v(ic).toFixed(2),d:+v(id).toFixed(2),l:+v(il).toFixed(2),t:+v(it).toFixed(2)});});
+    if(!filas.length)throw new Error('El archivo no tiene cobradores del equipo.');
+    CE_TMP=filas;const tot=filas.reduce((a,f)=>a+f.t,0);
+    $('ceRes').innerHTML=`<div class="okbox">📄 ${esc(file.name)} · ${filas.length} cobradores del equipo · total <b>${m$(tot)}</b>${fuera.length?`<br><span class="xs">No son del equipo (se ignoran): ${fuera.map(esc).join(', ')}</span>`:''}</div>`+
+      `<div class="fld" style="margin-top:10px"><label>Fecha del corte</label><input type="date" id="ceFechaCarga" class="inp" value="${hoyYMD()}" max="${hoyYMD()}"></div>`+
+      `<button class="btn gold block" onclick="publicarCobro(this)">🚀 Guardar corte del día</button>`;
+  }catch(e){console.error(e);$('ceRes').innerHTML=`<div class="info" style="background:#fee2e2;border-color:#fecaca;color:#7f1d1d">${esc(e.message)}</div>`;}}
+async function publicarCobro(b){const f=$('ceFechaCarga').value;if(!f)return toast('Elige la fecha');b.disabled=true;
+  try{await DB.set('cobro/'+f,{filas:CE_TMP,ts:Date.now()});
+    for(const c of COBS){const mine=CE_TMP.find(x=>x.cob===c.id);if(!mine)continue;const d=await DB.get('cobrocob/'+c.id);const dias=(d&&d.dias)||{};dias[f]=mine;await DB.set('cobrocob/'+c.id,{dias});}
+    const i=S.cobro.findIndex(s=>s.id===f);const doc={id:f,filas:CE_TMP};if(i>=0)S.cobro[i]=doc;else S.cobro.push(doc);S.cobro.sort((a,b)=>a.id.localeCompare(b.id));
+    toast('✅ Corte de cobro '+dmy(f)+' guardado');$('ceRes').innerHTML+=`<div class="okbox">✅ Corte ${dmy(f)} guardado.</div>`;renderEstado();
+  }catch(e){console.error(e);toast('No se pudo guardar');b.disabled=false;}}
+function cobroMes(mes){return S.cobro.filter(s=>s.id.slice(0,7)===mes);}
+function cobroUlt(mes){const a=cobroMes(mes);return a.length?a[a.length-1]:null;}
+function ceFila(snap,id){return snap?(snap.filas||[]).find(f=>f.cob===id)||null:null;}
+function ceTot(snap){const t={c:0,d:0,l:0,t:0};(snap?.filas||[]).forEach(f=>{t.c+=f.c;t.d+=f.d;t.l+=f.l;t.t+=f.t;});return t;}
+let _ceRows=[];
+function renderCobro(){
+  const lst=cobroMes(S.mes),sel=$('ceFecha'),prev=sel.value;
+  sel.innerHTML=lst.length?[...lst].reverse().map(s=>`<option value="${s.id}">${dmy(s.id)}</option>`).join(''):'<option value="">Sin cortes</option>';
+  if(prev&&lst.some(s=>s.id===prev))sel.value=prev;
+  const snap=lst.find(s=>s.id===sel.value),i=lst.indexOf(snap),ant=i>0?lst[i-1]:null;
+  const T=ceTot(snap),TA=ant?ceTot(ant):{t:0};const hoyZ=T.t-TA.t;
+  $('ceKpis').innerHTML=snap?kpiCard('💵','Cobro efectivo del mes',m0(T.t),`Acumulado al ${dmy(snap.id)}`,null,null,'#dcfce7')+
+    kpiCard('📆',ant?'Cobrado desde el corte anterior':'Cobrado (primer corte del mes)',m0(hoyZ),ant?`Del ${dmy(ant.id)} al ${dmy(snap.id)}`:'Desde el 1 del mes',null,null,'#dbe7ff')+
+    kpiCard('🛡️','Contiene',m0(T.c),`${pctTxt(T.t?T.c/T.t:0)} del cobro · Deteriora ${m0(T.d)}`,T.t?T.c/T.t:0,'ok','#e0e7ff')+
+    kpiCard('✅','Libera',m0(T.l),`${pctTxt(T.t?T.l/T.t:0)} del cobro`,T.t?T.l/T.t:0,'g','#fff1cc')
+    :'<div class="info" style="grid-column:1/-1">Aún no hay cortes de este mes. Sube el archivo Cobro_Efectivo_por_Cobrador en "Cargar datos" (tarjeta 4).</div>';
+  $('ceSub').textContent=snap?`Corte ${dmy(snap.id)}${ant?' · día = diferencia con el corte del '+dmy(ant.id):''}`:'';
+  const rows=COBS.map(c=>{const f=ceFila(snap,c.id)||{c:0,d:0,l:0,t:0},fa=ceFila(ant,c.id)||{t:0};return {c,f,dia:ant?f.t-fa.t:f.t,part:T.t?f.t/T.t:0};}).sort((a,b)=>b.f.t-a.f.t);_ceRows=rows;
+  $('tbCe').innerHTML='<thead><tr><th>#</th><th>Cobrador</th><th class="num">Contiene</th><th class="num">Deteriora</th><th class="num">Libera</th><th class="num">Total mes</th><th class="num">% zona</th><th class="num">Cobrado desde corte anterior</th><th style="width:16%"></th></tr></thead><tbody>'+
+    rows.map((r,k)=>`<tr><td>${k+1}</td><td class="cobn nowrap">${esc(r.c.corto)}</td><td class="num">${m$(r.f.c)}</td><td class="num">${m$(r.f.d)}</td><td class="num">${m$(r.f.l)}</td><td class="num b">${m$(r.f.t)}</td><td class="num">${pctTxt(r.part)}</td><td class="num">${m$(r.dia)}</td><td><div class="bar ok" style="margin:0"><i style="width:${rows[0].f.t?Math.min(100,r.f.t/rows[0].f.t*100):0}%"></i></div></td></tr>`).join('')+
+    `</tbody><tfoot><tr><td></td><td>Zona</td><td class="num">${m$(T.c)}</td><td class="num">${m$(T.d)}</td><td class="num">${m$(T.l)}</td><td class="num">${m$(T.t)}</td><td class="num">100%</td><td class="num">${m$(hoyZ)}</td><td></td></tr></tfoot>`;
+  const rs=[...rows];
+  mkChart('chCe',{type:'bar',data:{labels:rs.map(r=>r.c.corto),datasets:[{label:'Contiene',data:rs.map(r=>r.f.c),backgroundColor:'#2563eb',stack:'s'},{label:'Deteriora',data:rs.map(r=>r.f.d),backgroundColor:'#dc2626',stack:'s'},{label:'Libera',data:rs.map(r=>r.f.l),backgroundColor:'#16a34a',stack:'s',borderRadius:4}]},
+    options:{indexAxis:'y',maintainAspectRatio:false,plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${m$(c.raw)}`}}},scales:{x:{stacked:true,ticks:{callback:v=>'$'+fmt(v,0)}},y:{stacked:true,grid:{display:false},ticks:{autoSkip:false,font:{size:11}}}}}});
+  const labs=lst.map(s=>dmy(s.id).slice(0,5));let prevT=0;const dia=[],acum=[];lst.forEach(s=>{const t=ceTot(s).t;dia.push(+(t-prevT).toFixed(2));acum.push(+t.toFixed(2));prevT=t;});
+  mkChart('chCeDia',{data:{labels:labs,datasets:[{type:'bar',label:'Cobrado en el día',data:dia,backgroundColor:'#16a34a',borderRadius:5,yAxisID:'y'},{type:'line',label:'Acumulado del mes',data:acum,borderColor:'#0a1f44',backgroundColor:'#0a1f44',tension:.3,yAxisID:'y1'}]},
+    options:{maintainAspectRatio:false,plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${m$(c.raw)}`}}},scales:{y:{ticks:{callback:v=>'$'+fmt(v,0)}},y1:{position:'right',grid:{display:false},ticks:{callback:v=>'$'+fmt(v,0)}},x:{grid:{display:false}}}}});
+  $('tbCeDia').innerHTML=lst.length?'<thead><tr><th>Cobrador</th>'+lst.map(s=>`<th class="num">${dmy(s.id).slice(0,5)}</th>`).join('')+'<th class="num">Mes</th></tr></thead><tbody>'+
+    COBS.map(c=>{let p=0;return `<tr><td class="cobn nowrap">${esc(c.corto)}</td>`+lst.map(s=>{const t=(ceFila(s,c.id)||{t:p}).t;const d=t-p;p=t;return `<td class="num">${d?m0(d):'<span class="mut">—</span>'}</td>`;}).join('')+`<td class="num b">${m0(p)}</td></tr>`;}).join('')+'</tbody>'
+    :'<tbody><tr><td class="mut center" style="padding:18px">Sin cortes</td></tr></tbody>';
+}
+function exportCobro(){xlsxDownload(_ceRows.map(r=>({Cobrador:r.c.corto,Contiene:r.f.c,Deteriora:r.f.d,Libera:r.f.l,'Total mes':r.f.t,'% zona':+(r.part*100).toFixed(2),'Cobrado desde corte anterior':+r.dia.toFixed(2)})),`Cobro_Efectivo_${$('ceFecha').value||S.mes}.xlsx`,'Cobro efectivo');}
+
 function renderEstado(){const e=S.estado||{};const l=x=>x?new Date(x).toLocaleString('es-EC'):'—';
-  $('estadoCargas').innerHTML=`<div class="sumrow" style="margin:0"><div class="s">📋 Listado<b>${e.listado?fmt(e.listado.clientes,0)+' clientes':'—'}</b>${l(e.listado?.ts)}</div><div class="s">🔁 Refinanciamientos de ${MESES[+S.mes.slice(5)-1]}<b>${(()=>{const [d1,d2]=rangoMes(S.mes);let n=0,m=0;COBS.forEach(c=>refisDe(c.id,d1,d2).forEach(x=>{n++;m+=+x.saldo||0;}));return n+' créditos · '+m0(m);})()}</b>${l(e.refis?.ts)}</div><div class="s">📈 Mora proyectada<b>${S.mora.length} corte(s)</b>${S.mora.length?'último '+dmy(S.mora[S.mora.length-1].id):'—'}</div></div>`;}
+  $('estadoCargas').innerHTML=`<div class="sumrow" style="margin:0"><div class="s">📋 Listado<b>${e.listado?fmt(e.listado.clientes,0)+' clientes':'—'}</b>${l(e.listado?.ts)}</div><div class="s">🔁 Refinanciamientos de ${MESES[+S.mes.slice(5)-1]}<b>${(()=>{const [d1,d2]=rangoMes(S.mes);let n=0,m=0;COBS.forEach(c=>refisDe(c.id,d1,d2).forEach(x=>{n++;m+=+x.saldo||0;}));return n+' créditos · '+m0(m);})()}</b>${l(e.refis?.ts)}</div><div class="s">📈 Mora proyectada<b>${S.mora.length} corte(s)</b>${S.mora.length?'último '+dmy(S.mora[S.mora.length-1].id):'—'}</div><div class="s">💵 Cobro efectivo<b>${(()=>{const u=cobroUlt(S.mes);return u?m0(u.filas.reduce((t,f)=>t+f.t,0)):'—';})()}</b>${S.cobro.length?'último '+dmy(S.cobro[S.cobro.length-1].id):'—'}</div></div>`;}
 
 /* =====================================================================
    SUPERVISOR · EQUIPO (accesos)
@@ -1170,7 +1252,15 @@ async function crearAcceso(id,b){
 /* =====================================================================
    COBRADOR · VISTAS
    ===================================================================== */
+function renderCCobro(){const dias=Object.keys(S.cobroCob||{}).filter(d=>d.slice(0,7)===S.mes).sort();
+  if(!dias.length){$('cCobro').innerHTML='<h3>💵 Mi cobro efectivo</h3><div class="sub">Tu supervisor aún no carga el cobro efectivo de este mes.</div>';return;}
+  const u=S.cobroCob[dias[dias.length-1]],a=dias.length>1?S.cobroCob[dias[dias.length-2]]:null;const dia=u.t-(a?a.t:0);
+  $('cCobro').innerHTML=`<h3>💵 Mi cobro efectivo del mes</h3><div class="sub">Corte ${dmy(dias[dias.length-1])}</div>
+    <div style="display:flex;gap:22px;flex-wrap:wrap;align-items:flex-end"><div><div class="kpi" style="--accent:transparent"><div class="vl" style="margin:0">${m0(u.t)}</div></div><div class="xs mut">acumulado del mes</div></div>
+    <div><div class="b" style="font-size:18px;color:var(--ok)">+${m0(dia)}</div><div class="xs mut">${a?'desde el corte del '+dmy(dias[dias.length-2]):'primer corte del mes'}</div></div></div>
+    <div class="mini" style="margin-top:10px"><span>🛡️ Contiene</span><b>${m$(u.c)}</b></div><div class="mini"><span>🔻 Deteriora</span><b>${m$(u.d)}</b></div><div class="mini"><span>✅ Libera</span><b>${m$(u.l)}</b></div>`;}
 function renderCInicio(){
+  renderCCobro();
   const id=S.cob,c=COB_BY_ID[id],m=metaDe(id),mes=S.mes,ag=agregRegs(S.regs,mes)[id],dm=diasMes(mes),dt=diaTranscurrido(mes),ritmo=dt/dm,rest=Math.max(1,dm-dt+1);
   const pr=m.rm?ag.ret/m.rm:0,pf=m.fm?ag.refi/m.fm:0;
   const falR=Math.max(0,m.rm-ag.ret),falF=Math.max(0,m.fm-ag.refi);
