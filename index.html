@@ -343,6 +343,25 @@ canvas{max-width:100%}
   <div class="card" style="margin-top:14px"><h3>Cobro por día y cobrador</h3><div class="sub">Lo cobrado entre cortes (total del día)</div><div class="tw"><table id="tbCeDia"></table></div></div>
 </section>
 
+<section class="sec" id="s-gest">
+  <div class="card"><div class="ch"><div><h3>📝 Gestiones de cobranza</h3><div class="sub" id="gSub">Sube el archivo gestiones_cobranza.csv en "Cargar datos" (tarjeta 5).</div></div></div>
+    <div class="grid g4" id="gKpis"></div></div>
+  <div class="card" style="margin-top:14px"><h3>📞 Calidad del contacto</h3><div class="sub">Por visita a cliente (no por crédito) · Directa = habló con el titular · Indirecta = familiar, vecino, cónyuge… · No gestión = no se ubicó</div>
+    <div class="tw"><table id="tbCalidad"></table></div></div>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card"><div class="ch"><div><h3>🕒 Gestiones por hora</h3><div class="sub">Clientes gestionados en cada hora (cuenta clientes, no créditos)</div></div><select id="gHoraCob" class="inp" style="width:auto" onchange="renderGestHora()"></select></div><div class="chartbox" style="height:300px"><canvas id="chHora"></canvas></div></div>
+    <div class="card"><h3>Clientes por hora y cobrador</h3><div class="sub">Total del mes</div><div class="tw" style="max-height:340px"><table id="tbHora" class="hm"></table></div></div>
+  </div>
+  <div class="card" style="margin-top:14px"><h3>🚫 Clientes no gestionados</h3><div class="sub">Clientes del listado de cartera sin ninguna gestión en el mes</div><div class="tw"><table id="tbNoGes"></table></div></div>
+  <div class="card" style="margin-top:14px">
+    <div class="ch"><div><h3>🤝 Compromisos de pago</h3><div class="sub">Cumplido = en el Detalle por Clientes publicado después, el cliente <b>mejoró su Calif. Rodam.</b>, <b>bajó su cuota vencida</b> o <b>salió del listado</b> (se puso al día).</div></div>
+      <div class="chips" id="cpChips"><span class="chip on" data-k="venc" onclick="setCp(this)">Vencidos</span><span class="chip" data-k="hoy" onclick="setCp(this)">Hoy</span><span class="chip" data-k="man" onclick="setCp(this)">Mañana</span><span class="chip" data-k="prox" onclick="setCp(this)">Próximos</span><span class="chip" data-k="todos" onclick="setCp(this)">Todos</span></div></div>
+    <div class="tw" style="max-height:380px"><table id="tbCompCob"></table></div>
+    <div class="fbar" style="margin-top:12px"><select id="cpCob" class="inp" onchange="renderComp()"></select><select id="cpEst" class="inp" onchange="renderComp()"><option value="">Estado: todos</option><option value="ok">✅ Cumplido</option><option value="no">❌ Incumplido</option><option value="pend">⏳ Por vencer</option><option value="sd">Sin comparación</option></select><button class="btn ghost sm" onclick="exportComp()">⬇ Excel</button></div>
+    <div class="tw"><table id="tbComp"></table></div>
+  </div>
+</section>
+
 <section class="sec" id="s-listado">
   <div class="card">
     <div class="ch"><div><h3>Listado de cartera en línea</h3><div class="sub" id="lsSub">Sube el Detalle por Clientes en "Cargar datos".</div></div>
@@ -407,6 +426,12 @@ canvas{max-width:100%}
       <div class="drop" id="dpCe" onclick="pick('fCe')"><div class="big">💵</div><b>Arrastra o toca para subir</b><div class="sm mut">Cobro_Efectivo_por_Cobrador.xlsx</div></div>
       <input type="file" id="fCe" accept=".xlsx,.xls,.csv" class="hidden" onchange="leerCobro(this.files[0])">
       <div id="ceRes"></div>
+    </div>
+    <div class="card">
+      <h3>5 · Gestiones</h3><div class="sub">gestiones_cobranza.csv. Se cuentan visitas por cliente (no por crédito). Se acumula en el mes sin duplicar.</div>
+      <div class="drop" id="dpGe" onclick="pick('fGe')"><div class="big">📝</div><b>Arrastra o toca para subir</b><div class="sm mut">gestiones_cobranza.csv</div></div>
+      <input type="file" id="fGe" accept=".csv,.txt" class="hidden" onchange="leerGest(this.files[0])">
+      <div id="geRes"></div>
     </div>
   </div>
   <div class="card" style="margin-top:14px"><h3>Última actualización</h3><div id="estadoCargas" class="sm"></div></div>
@@ -625,7 +650,7 @@ const DB={
 /* =====================================================================
    ESTADO Y SESIÓN
    ===================================================================== */
-const S={cobro:[],cobroCob:{},lsHist:[],refisHist:[],lsFoto:null,rol:null,cob:null,email:'',mes:hoyYMD().slice(0,7),metas:null,regs:[],listado:{},refis:{},mora:[],estado:{},equipo:{},unsub:[]};
+const S={gest:{},histCache:{},cobro:[],cobroCob:{},lsHist:[],refisHist:[],lsFoto:null,rol:null,cob:null,email:'',mes:hoyYMD().slice(0,7),metas:null,regs:[],listado:{},refis:{},mora:[],estado:{},equipo:{},unsub:[]};
 function metasDefault(){const o={};COBS.forEach(c=>o[c.id]={rm:c.rm,fm:c.fm});return o;}
 function metaDe(id){const m=(S.metas&&S.metas[id])||metasDefault()[id]||{rm:0,fm:0};return {rm:+m.rm||0,fm:+m.fm||0,ml:m.ml!=null?+m.ml:0.31,mc:m.mc!=null?+m.mc:0.66};}
 const LIBRES_MES=6;
@@ -689,13 +714,13 @@ function boot(){
 /* =====================================================================
    NAVEGACIÓN
    ===================================================================== */
-const TABS_SUP=[['s-resumen','📊 Resumen'],['s-metas','🎯 Metas y semanas'],['s-refis','🔁 Refinanciamientos'],['s-mora','📈 Mora proyectada'],['s-cobro','💵 Cobro efectivo'],['s-listado','📋 Listado'],['s-registros','🧾 Registros'],['s-cargar','⬆️ Cargar datos'],['s-equipo','👥 Equipo']];
+const TABS_SUP=[['s-resumen','📊 Resumen'],['s-metas','🎯 Metas y semanas'],['s-refis','🔁 Refinanciamientos'],['s-mora','📈 Mora proyectada'],['s-cobro','💵 Cobro efectivo'],['s-gest','📝 Gestiones'],['s-listado','📋 Listado'],['s-registros','🧾 Registros'],['s-cargar','⬆️ Cargar datos'],['s-equipo','👥 Equipo']];
 const TABS_COB=[['c-inicio','🏠 Mi avance'],['c-registrar','➕ Registrar'],['c-cartera','📋 Mi cartera'],['c-mora','📈 Mi mora']];
 let tabActual='';
 function goTab(id){tabActual=id;document.querySelectorAll('.sec').forEach(s=>s.classList.toggle('on',s.id===id));
   document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===id));window.scrollTo({top:0});renderTab(id);}
 function renderTab(id){
-  const f={'s-resumen':renderResumen,'s-metas':renderMetas,'s-refis':renderRefis,'s-mora':renderMora,'s-cobro':renderCobro,'s-listado':renderListado,'s-registros':renderRegs,'s-cargar':renderEstado,'s-equipo':renderEquipo,
+  const f={'s-resumen':renderResumen,'s-metas':renderMetas,'s-refis':renderRefis,'s-mora':renderMora,'s-cobro':renderCobro,'s-gest':renderGest,'s-listado':renderListado,'s-registros':renderRegs,'s-cargar':renderEstado,'s-equipo':renderEquipo,
     'c-inicio':renderCInicio,'c-registrar':()=>{},'c-cartera':renderCCartera,'c-mora':renderCMora}[id];
   try{f&&f();}catch(e){console.error(e);}
 }
@@ -730,6 +755,7 @@ async function cargarSup(){
   S.unsub.push(DB.listen('registros',[['mes','==',S.mes]],docs=>{S.regs=docs;if(['s-resumen','s-metas','s-registros'].includes(tabActual))renderTab(tabActual);}));
   const [ls,rf,mo,es,eq,lh,rh,ce]=await Promise.all([DB.list('listado'),DB.list('refis'),DB.list('mora'),DB.get('config/estado'),DB.list('equipo'),DB.list('listadoresumen'),DB.list('refishist'),DB.list('cobro')]).catch(e=>{console.error(e);return [[],[],[],null,[],[],[],[]];});
   S.cobro=(ce||[]).sort((a,b)=>a.id.localeCompare(b.id));
+  S.gest={};try{(await DB.list('gestiones',[['mes','==',S.mes]])).forEach(d=>S.gest[d.cob]=d.v||[]);}catch(e){console.error(e);}
   S.lsHist=(lh||[]).sort((a,b)=>a.id.localeCompare(b.id));S.refisHist=(rh||[]).sort((a,b)=>a.id.localeCompare(b.id));
   S.listado={};ls.forEach(d=>S.listado[d.id]=d);
   S.refis={};rf.forEach(d=>S.refis[d.id]=d.items||[]);
@@ -873,7 +899,7 @@ function initSupControles(){
   ['rfCob','lsCob','rgCob'].forEach(i=>$(i).innerHTML=opts);
   $('moCobChart').innerHTML='<option value="">Zona Milagro (total)</option>'+COBS.map(c=>`<option value="${c.id}">${esc(c.corto)}</option>`).join('');
   $('lsCal').innerHTML='<option value="">Calificación: todas</option>'+CAL_ORDER.map(c=>`<option>${c}</option>`).join('');
-  ['dpLs','dpRf','dpMo','dpCe'].forEach((id,i)=>{const el=$(id),fn=[leerListado,leerRefis,leerMora,leerCobro][i];
+  ['dpLs','dpRf','dpMo','dpCe','dpGe'].forEach((id,i)=>{const el=$(id),fn=[leerListado,leerRefis,leerMora,leerCobro,leerGest][i];
     el.addEventListener('dragover',e=>{e.preventDefault();el.classList.add('ov');});el.addEventListener('dragleave',()=>el.classList.remove('ov'));
     el.addEventListener('drop',e=>{e.preventDefault();el.classList.remove('ov');const f=e.dataTransfer.files[0];if(f)fn(f);});});
 }
@@ -992,15 +1018,16 @@ function renderMoraChart(){
 /* =====================================================================
    LISTADO (supervisor y cobrador comparten la lógica)
    ===================================================================== */
-const QVIEWS=[['altos','💰 Montos más altos','Saldo crédito mayor a menor'],['bajos','🪙 Saldos más bajos','Para cancelar rápido'],['siembra','🌱 Siembra 1-2-3','Algún crédito en cuota 1, 2 o 3'],['todos','📋 Todos','']];
+const QVIEWS=[['altos','💰 Montos más altos','Saldo crédito mayor a menor'],['bajos','🪙 Saldos más bajos','Para cancelar rápido'],['siembra','🌱 Siembra 1-2-3','Algún crédito en cuota 1, 2 o 3'],['singes','🚫 Sin gestión','Sin visita este mes'],['todos','📋 Todos','']];
 let lsView='altos',lsPage=0,cView='altos',cPage=0;const PAGE=100;
-function qvHtml(cur,fn){return QVIEWS.map(([k,t,s])=>`<button class="${cur===k?'on':''}" onclick="${fn}('${k}')">${t}${s?`<small>${s}</small>`:''}</button>`).join('');}
+function qvHtml(cur,fn){return QVIEWS.filter(([k])=>k!=='singes'||S.rol==='sup').map(([k,t,s])=>`<button class="${cur===k?'on':''}" onclick="${fn}('${k}')">${t}${s?`<small>${s}</small>`:''}</button>`).join('');}
 function setLsView(k){lsView=k;lsPage=0;renderListado();}
 function setCView(k){cView=k;cPage=0;renderCCartera();}
 function clientesDe(ids){const out=[];const src=(S.rol==='sup'&&S.lsFoto)?S.lsFoto:S.listado;ids.forEach(id=>{const d=src[id];if(d&&d.cl)d.cl.forEach(x=>out.push({...x,cob:id}));});return out;}
 function filtrarVista(arr,view){
   let r=arr;
-  if(view==='siembra')r=r.filter(x=>SIE(x)>0).sort((a,b)=>SIE(a)-SIE(b)||b.sc-a.sc);
+  if(view==='singes')r=r.filter(x=>!gestSet(x.cob).has(String(x.cod))).sort((a,b)=>b.sc-a.sc);
+  else if(view==='siembra')r=r.filter(x=>SIE(x)>0).sort((a,b)=>SIE(a)-SIE(b)||b.sc-a.sc);
   else if(view==='bajos')r=r.filter(x=>x.sc>0).sort((a,b)=>a.sc-b.sc);
   else if(view==='altos')r=[...r].sort((a,b)=>b.sc-a.sc);
   else r=[...r].sort((a,b)=>(RANK_CAL[a.cm]??9)-(RANK_CAL[b.cm]??9)||a.nom.localeCompare(b.nom));
@@ -1148,8 +1175,8 @@ async function publicarListado(b){if(!LS_OUT)return;if(b)b.disabled=true;
     const P=COBS.filter(c=>LS_OUT.presentes.includes(c.id));
     await Promise.all(P.map(c=>DB.set('listado/'+c.id,{cl:LS_OUT.porCob[c.id],ts,corte:LS_OUT.corte}).then(()=>{S.listado[c.id]={cl:LS_OUT.porCob[c.id],ts,corte:LS_OUT.corte};paso();})));
     const totCli=COBS.reduce((t,c)=>t+((S.listado[c.id]?.cl)||[]).length,0);
-    const est={listado:{ts,filas:LS_OUT.filas,clientes:totCli,corte:LS_OUT.corte}};
-    const fecha=$('lsFecha')?.value||hoyYMD();const prevRes=(S.lsHist.find(h=>h.id===fecha)||{}).cobs||{};const res={...prevRes};
+    const fecha=$('lsFecha')?.value||hoyYMD();
+    const est={listado:{ts,fecha,filas:LS_OUT.filas,clientes:totCli,corte:LS_OUT.corte}};const prevRes=(S.lsHist.find(h=>h.id===fecha)||{}).cobs||{};const res={...prevRes};
     await Promise.all(P.map(c=>DB.set('listadohist/'+fecha+'__'+c.id,{cl:LS_OUT.porCob[c.id],fecha,cob:c.id,ts,corte:LS_OUT.corte}).then(paso)));
     for(const c of P){const a=LS_OUT.porCob[c.id];
       res[c.id]={n:a.length,sc:+a.reduce((t,x)=>t+x.sc,0).toFixed(2),cv:+a.reduce((t,x)=>t+x.cv,0).toFixed(2),s1:a.filter(x=>SIE(x)===1).length,s2:a.filter(x=>SIE(x)===2).length,s3:a.filter(x=>SIE(x)===3).length,
@@ -1274,8 +1301,110 @@ function renderCobro(){
 }
 function exportCobro(){xlsxDownload(_ceRows.map(r=>({Cobrador:r.c.corto,Contiene:r.f.c,Deteriora:r.f.d,Libera:r.f.l,'Total mes':r.f.t,'% zona':+(r.part*100).toFixed(2),'Cobrado desde corte anterior':+r.dia.toFixed(2)})),`Cobro_Efectivo_${$('ceFecha').value||S.mes}.xlsx`,'Cobro efectivo');}
 
+/* ---- 5. Gestiones ---- */
+function gestSet(cob){const a=S.gest&&S.gest[cob];const st=new Set();(a||[]).forEach(v=>st.add(String(v.cli)));return st;}
+let GE_TMP=null;
+async function leerGest(file){if(!file)return;$('geRes').innerHTML='<div class="info">Leyendo archivo…</div>';
+  try{const buf=await file.arrayBuffer();let txt;try{txt=new TextDecoder('utf-8',{fatal:true}).decode(buf);}catch(e){txt=new TextDecoder('iso-8859-1').decode(buf);}
+    const lines=txt.replace(/^﻿/,'').split(/\r?\n/).filter(l=>l.trim());const H=lines[0].split(';').map(h=>h.trim());const ix=k=>H.indexOf(k);
+    const iC=ix('Cobrador'),iId=ix('Cli Id'),iN=ix('Cliente'),iT=ix('Tipo'),iA=ix('Activida'),iCo=ix('Compromiso'),iO=ix('Observacion'),iAb=ix('Abona'),iVc=ix('Valor Cuota'),iF=ix('Act Fecha'),iCal=ix('Calificacion');
+    if(iC<0||iId<0||iF<0)throw new Error('No reconozco el archivo. Debe ser gestiones_cobranza.csv (separado por ;).');
+    const V=new Map();const fuera=new Set();let filas=0;
+    lines.slice(1).forEach(l=>{let f=l.split(';');if(f.length>H.length){const extra=f.length-H.length;f=[...f.slice(0,iO),f.slice(iO,iO+extra+1).join(';'),...f.slice(iO+extra+1)];}
+      const cob=cobDe(f[iC]);if(!cob){if((f[iC]||'').trim())fuera.add(f[iC].trim());return;}filas++;
+      const m=String(f[iF]||'').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})/);if(!m)return;
+      const ts=`${m[3]}-${pad(m[2])}-${pad(m[1])} ${pad(m[4])}:${m[5]}`;const cli=String(f[iId]||'').trim();const k=cob.id+'|'+cli+'|'+ts;
+      const tipo=String(f[iT]||'').trim().toLowerCase();const t=tipo.startsWith('dir')?'D':tipo.startsWith('ind')?'I':'N';
+      const act=String(f[iA]||'').trim();const cm=String(f[iCo]||'').trim().match(/^(\d{1,2})-(\d{1,2})-(\d{4})/);
+      const o=V.get(k)||{cob:cob.id,cli,nom:String(f[iN]||'').trim(),ts,t,act,comp:'',ab:0,vc:0,nc:0,obs:'',cal:String(f[iCal]||'').trim()};
+      o.nc++;o.ab+=num(f[iAb]);o.vc+=num(f[iVc]);if(act==='Compromiso'&&cm){o.act='Compromiso';o.comp=`${cm[3]}-${pad(cm[2])}-${pad(cm[1])}`;o.obs=String(f[iO]||'').trim().slice(0,160);}
+      V.set(k,o);});
+    GE_TMP=[...V.values()];if(!GE_TMP.length)throw new Error('El archivo no tiene gestiones de los cobradores del equipo.');
+    const meses=[...new Set(GE_TMP.map(v=>v.ts.slice(0,7)))].sort();const porCob={};GE_TMP.forEach(v=>porCob[v.cob]=(porCob[v.cob]||0)+1);
+    $('geRes').innerHTML=`<div class="okbox">📄 ${esc(file.name)} · ${fmt(filas,0)} filas (por crédito) → <b>${fmt(GE_TMP.length,0)} visitas a clientes</b> de ${Object.keys(porCob).length} cobradores · ${meses.map(mesNombre).join(', ')}${fuera.size?`<br><span class="xs">No son del equipo (se ignoran): ${[...fuera].map(esc).join(', ')}</span>`:''}</div>
+      <button class="btn gold block" style="margin-top:10px" onclick="publicarGest(this)">🚀 Guardar gestiones</button>`;
+  }catch(e){console.error(e);$('geRes').innerHTML=`<div class="info" style="background:#fee2e2;border-color:#fecaca;color:#7f1d1d">${esc(e.message)}</div>`;}}
+async function publicarGest(b){b.disabled=true;b.innerHTML='⏳ Guardando…';
+  try{const grupos={};GE_TMP.forEach(v=>{const k=v.ts.slice(0,7)+'__'+v.cob;(grupos[k]=grupos[k]||[]).push(v);});let nuevos=0;
+    await Promise.all(Object.entries(grupos).map(async([id,arr])=>{const [mes,cob]=id.split('__');const prev=await DB.get('gestiones/'+id);const mp=new Map(((prev&&prev.v)||[]).map(v=>[v.cli+'|'+v.ts,v]));
+      arr.forEach(v=>{const k=v.cli+'|'+v.ts;if(!mp.has(k))nuevos++;const {cob:_c,...r}=v;mp.set(k,r);});
+      const lista=[...mp.values()].sort((a,b)=>a.ts.localeCompare(b.ts));await DB.set('gestiones/'+id,{cob,mes,v:lista,ts:Date.now()});if(mes===S.mes)S.gest[cob]=lista;}));
+    b.innerHTML='✅ Guardado';toast('✅ Gestiones guardadas');$('geRes').innerHTML+=`<div class="okbox">✅ ${fmt(nuevos,0)} visitas nuevas guardadas (las repetidas no se duplican).</div>`;renderEstado();
+  }catch(e){console.error(e);toast('No se pudo guardar');b.disabled=false;b.innerHTML='🚀 Guardar gestiones';}}
+function calidadDe(arr){const c={D:0,I:0,N:0};(arr||[]).forEach(v=>c[v.t]=(c[v.t]||0)+1);const n=c.D+c.I+c.N;return {...c,n,pD:n?c.D/n:0,pI:n?c.I/n:0,pN:n?c.N/n:0,cli:new Set((arr||[]).map(v=>v.cli)).size};}
+function barCalidad(q){return `<div style="display:flex;height:12px;border-radius:99px;overflow:hidden;background:#e8edf6"><i style="width:${q.pD*100}%;background:#16a34a"></i><i style="width:${q.pI*100}%;background:#eab308"></i><i style="width:${q.pN*100}%;background:#dc2626"></i></div>`;}
+let cpTipo='venc';
+function setCp(el){document.querySelectorAll('#cpChips .chip').forEach(c=>c.classList.toggle('on',c===el));cpTipo=el.dataset.k;renderComp();}
+async function renderGest(){
+  const todos=[];COBS.forEach(c=>(S.gest[c.id]||[]).forEach(v=>todos.push({...v,cob:c.id})));
+  const q=calidadDe(todos);let cart=0,ges=0;COBS.forEach(c=>{const cl=(S.listado[c.id]?.cl)||[];const st=gestSet(c.id);cart+=cl.length;ges+=cl.filter(x=>st.has(String(x.cod))).length;});
+  const ult=todos.length?todos.reduce((a,v)=>v.ts>a?v.ts:a,''):'';
+  $('gSub').textContent=todos.length?`${mesNombre(S.mes)} · última gestión registrada ${dmy(ult.slice(0,10))} ${ult.slice(11)}`:'Sube el archivo gestiones_cobranza.csv en "Cargar datos" (tarjeta 5).';
+  const comps=todos.filter(v=>v.act==='Compromiso'&&v.comp),h=hoyYMD();
+  $('gKpis').innerHTML=kpiCard('📝','Visitas a clientes',fmt(q.n,0),`${fmt(q.cli,0)} clientes distintos`,null,null,'#dbe7ff')+
+    kpiCard('🚫','Cartera sin gestión',fmt(cart-ges,0),`${pctTxt(cart?ges/cart:0,0)} de la cartera ya gestionada (${fmt(ges,0)} de ${fmt(cart,0)})`,cart?ges/cart:0,'ok','#fee2e2')+
+    kpiCard('📞','Contacto directo',pctTxt(q.pD,0),`Indirecto ${pctTxt(q.pI,0)} · No gestión ${pctTxt(q.pN,0)}`,q.pD,'ok','#dcfce7')+
+    kpiCard('🤝','Compromisos',fmt(comps.length,0),`Hoy ${comps.filter(v=>v.comp===h).length} · vencidos ${comps.filter(v=>v.comp<h).length}`,null,null,'#fff1cc');
+  // calidad
+  const rowsQ=COBS.map(c=>({c,q:calidadDe(S.gest[c.id])})).sort((a,b)=>b.q.pD-a.q.pD);
+  $('tbCalidad').innerHTML='<thead><tr><th>Cobrador</th><th class="num">Visitas</th><th class="num">Clientes</th><th class="num">Directa</th><th class="num">Indirecta</th><th class="num">No gestión</th><th style="width:30%">Distribución</th></tr></thead><tbody>'+
+    rowsQ.map(({c,q})=>`<tr><td class="cobn nowrap">${esc(c.corto)}</td><td class="num">${q.n}</td><td class="num">${q.cli}</td><td class="num"><b class="ok">${pctTxt(q.pD,0)}</b> <span class="xs mut">(${q.D})</span></td><td class="num"><b class="warn">${pctTxt(q.pI,0)}</b> <span class="xs mut">(${q.I})</span></td><td class="num"><b class="bad">${pctTxt(q.pN,0)}</b> <span class="xs mut">(${q.N})</span></td><td>${barCalidad(q)}</td></tr>`).join('')+
+    `</tbody><tfoot><tr><td>Zona</td><td class="num">${q.n}</td><td class="num">${q.cli}</td><td class="num">${pctTxt(q.pD,0)}</td><td class="num">${pctTxt(q.pI,0)}</td><td class="num">${pctTxt(q.pN,0)}</td><td>${barCalidad(q)}</td></tr></tfoot>`;
+  // sin gestion
+  const rowsN=COBS.map(c=>{const cl=(S.listado[c.id]?.cl)||[];const st=gestSet(c.id);const sin=cl.filter(x=>!st.has(String(x.cod)));return {c,n:cl.length,sin:sin.length,sc:sin.reduce((t,x)=>t+x.sc,0),cv:sin.reduce((t,x)=>t+x.cv,0),sie:sin.filter(x=>SIE(x)>0).length};}).sort((a,b)=>b.sin-a.sin);
+  $('tbNoGes').innerHTML='<thead><tr><th>Cobrador</th><th class="num">Clientes cartera</th><th class="num">Gestionados</th><th class="num">Sin gestión</th><th class="num">% sin gestión</th><th class="num">Saldo sin gestión</th><th class="num">Cuota vencida</th><th class="num">Siembra sin gestión</th><th></th></tr></thead><tbody>'+
+    rowsN.map(r=>`<tr><td class="cobn nowrap">${esc(r.c.corto)}</td><td class="num">${r.n}</td><td class="num">${r.n-r.sin}</td><td class="num b bad">${r.sin}</td><td class="num">${pctTxt(r.n?r.sin/r.n:0,0)}</td><td class="num">${m0(r.sc)}</td><td class="num">${m0(r.cv)}</td><td class="num">${r.sie}</td><td><button class="btn ghost sm" onclick="verSinGes('${r.c.id}')">Ver lista</button></td></tr>`).join('')+'</tbody>';
+  // horas
+  const hc=$('gHoraCob');if(hc.options.length<=1)hc.innerHTML='<option value="">Zona (todos)</option>'+COBS.map(c=>`<option value="${c.id}">${esc(c.corto)}</option>`).join('');
+  renderGestHora();await renderComp();
+}
+function verSinGes(id){$('lsCob').value=id;lsView='singes';lsPage=0;goTab('s-listado');}
+function horaMapa(arr){const m={};const vistos=new Set();(arr||[]).forEach(v=>{const hh=+v.ts.slice(11,13),k=v.cli+'|'+v.ts.slice(0,10)+'|'+hh;if(vistos.has(k))return;vistos.add(k);m[hh]=(m[hh]||0)+1;});return m;}
+function renderGestHora(){
+  const id=$('gHoraCob').value;const arr=id?(S.gest[id]||[]):COBS.flatMap(c=>S.gest[c.id]||[]);const m=horaMapa(arr);
+  const hs=[];for(let h=7;h<=20;h++)hs.push(h);
+  mkChart('chHora',{type:'bar',data:{labels:hs.map(h=>pad(h)+':00'),datasets:[{label:'Clientes gestionados',data:hs.map(h=>m[h]||0),backgroundColor:hs.map(h=>{const mx=Math.max(...hs.map(x=>m[x]||0),1);return (m[h]||0)>=mx*.8?'#0a1f44':'#2563eb';}),borderRadius:5}]},
+    options:{maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{precision:0}},x:{grid:{display:false}}}}});
+  const H2=[];for(let h=8;h<=19;h++)H2.push(h);const all=COBS.map(c=>({c,m:horaMapa(S.gest[c.id])}));const mx=Math.max(1,...all.flatMap(r=>H2.map(h=>r.m[h]||0)));
+  $('tbHora').innerHTML='<thead><tr><th>Cobrador</th>'+H2.map(h=>`<th class="center">${h}h</th>`).join('')+'<th class="num">Total</th></tr></thead><tbody>'+
+    all.map(r=>{let t=0;return `<tr><td class="cobn nowrap">${esc(r.c.corto)}</td>`+H2.map(h=>{const v=r.m[h]||0;t+=v;return `<td class="h" style="background:rgba(37,99,235,${v?.08+.6*v/mx:0})">${v||''}</td>`;}).join('')+`<td class="num b">${t}</td></tr>`;}).join('')+'</tbody>';
+}
+async function histCli(fecha,cob){const k=fecha+'__'+cob;if(!(k in S.histCache)){try{const d=await DB.get('listadohist/'+k);S.histCache[k]=d&&d.cl?new Map(d.cl.map(x=>[String(x.cod),x])):null;}catch(e){S.histCache[k]=null;}}return S.histCache[k];}
+let _cpRows=[];
+async function renderComp(){
+  const h=hoyYMD(),man=(()=>{const d=new Date();d.setDate(d.getDate()+1);return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;})();
+  const fotos=(S.lsHist||[]).map(x=>x.id).sort();const fechaAct=S.estado.listado?(S.estado.listado.fecha||(d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`)(new Date(S.estado.listado.ts))):'';
+  const comps=[];COBS.forEach(c=>(S.gest[c.id]||[]).filter(v=>v.act==='Compromiso'&&v.comp).forEach(v=>comps.push({...v,cob:c.id})));
+  for(const v of comps){
+    if(v.comp>h){v.est='pend';continue;}
+    const d0=v.ts.slice(0,10);const base=[...fotos].reverse().find(f=>f<=d0)||fotos[0];
+    const now=((S.listado[v.cob]?.cl)||[]).find(x=>String(x.cod)===String(v.cli));
+    if(!base||base>=fechaAct){v.est='sd';v.ahora=now;continue;}
+    const mp=await histCli(base,v.cob);const b=mp?mp.get(String(v.cli)):null;v.antes=b;v.ahora=now;v.base=base;
+    if(!b){v.est='sd';continue;}
+    if(!now){v.est='ok';v.ev='Salió del listado (se puso al día)';}
+    else if((RANK_CAL[now.cr]??9)<(RANK_CAL[b.cr]??9)){v.est='ok';v.ev=`Mejoró rodamiento ${b.cr} → ${now.cr}`;}
+    else if(now.cv<b.cv-0.01){v.est='ok';v.ev=`Bajó cuota vencida ${m$(b.cv)} → ${m$(now.cv)}`;}
+    else{v.est='no';v.ev='Sin mejora';}
+  }
+  const filt=v=>cpTipo==='venc'?v.comp<h:cpTipo==='hoy'?v.comp===h:cpTipo==='man'?v.comp===man:cpTipo==='prox'?v.comp>h:true;
+  const sel=comps.filter(filt);
+  const rows=COBS.map(c=>{const a=sel.filter(v=>v.cob===c.id);const ok=a.filter(v=>v.est==='ok').length,no=a.filter(v=>v.est==='no').length;return {c,n:a.length,ok,no,pend:a.filter(v=>v.est==='pend').length,sd:a.filter(v=>v.est==='sd').length,p:(ok+no)?ok/(ok+no):null};}).sort((a,b)=>b.n-a.n);
+  $('tbCompCob').innerHTML='<thead><tr><th>Cobrador</th><th class="num">Compromisos</th><th class="num">✅ Cumplidos</th><th class="num">❌ Incumplidos</th><th class="num">⏳ Por vencer</th><th class="num">Sin comparación</th><th class="num">% cumplimiento</th><th style="width:18%"></th></tr></thead><tbody>'+
+    rows.map(r=>`<tr><td class="cobn nowrap">${esc(r.c.corto)}</td><td class="num">${r.n}</td><td class="num ok b">${r.ok}</td><td class="num bad b">${r.no}</td><td class="num">${r.pend}</td><td class="num mut">${r.sd}</td><td class="num b">${r.p==null?'—':pctTxt(r.p,0)}</td><td>${r.p==null?'':`<div class="bar ${r.p>=.7?'ok':r.p>=.4?'warn':'bad'}" style="margin:0"><i style="width:${r.p*100}%"></i></div>`}</td></tr>`).join('')+'</tbody>';
+  const cc=$('cpCob');if(cc.options.length<=1)cc.innerHTML='<option value="">Todos los cobradores</option>'+COBS.map(c=>`<option value="${c.id}">${esc(c.corto)}</option>`).join('');
+  const est=$('cpEst').value,cob=cc.value;
+  const det=sel.filter(v=>(!cob||v.cob===cob)&&(!est||v.est===est)).sort((a,b)=>a.comp.localeCompare(b.comp)||a.cob.localeCompare(b.cob));_cpRows=det;
+  const B={ok:'<span class="badge r-Mejora">✅ Cumplido</span>',no:'<span class="badge r-Deteriora">❌ Incumplido</span>',pend:'<span class="badge r-Mantiene">⏳ Por vencer</span>',sd:'<span class="badge c-E2">Sin comparación</span>'};
+  $('tbComp').innerHTML='<thead><tr><th>Fecha compromiso</th><th>Cobrador</th><th>Cliente</th><th>Gestión</th><th>Observación</th><th class="center">Rodam. antes → ahora</th><th class="num">Cuota vencida antes → ahora</th><th>Estado</th></tr></thead><tbody>'+
+    (det.length?det.slice(0,400).map(v=>`<tr><td class="nowrap b">${dmy(v.comp)}</td><td class="cobn nowrap sm">${esc(COB_BY_ID[v.cob].corto)}</td><td><div class="b sm">${esc(v.nom)}</div><div class="xs mut">${esc(v.cli)}</div></td><td class="nowrap sm">${dmy(v.ts.slice(0,10))} ${v.ts.slice(11)}</td><td class="xs" style="max-width:320px">${esc(v.obs)}</td>
+      <td class="center nowrap">${v.antes?calBadge(v.antes.cr):'<span class="mut">—</span>'} → ${v.ahora?calBadge(v.ahora.cr):(v.est==='ok'?'<span class="ok b">al día</span>':'<span class="mut">—</span>')}</td>
+      <td class="num nowrap">${v.antes?m$(v.antes.cv):'—'} → ${v.ahora?m$(v.ahora.cv):'—'}</td><td>${B[v.est]}${v.ev?`<div class="xs mut">${esc(v.ev)}</div>`:''}</td></tr>`).join(''):'<tr><td colspan="8" class="center mut" style="padding:24px">Sin compromisos en este filtro</td></tr>')+'</tbody>';
+}
+function exportComp(){const E={ok:'Cumplido',no:'Incumplido',pend:'Por vencer',sd:'Sin comparación'};xlsxDownload(_cpRows.map(v=>({'Fecha compromiso':dmy(v.comp),Cobrador:COB_BY_ID[v.cob].corto,'Cod cliente':v.cli,Cliente:v.nom,'Fecha gestión':dmy(v.ts.slice(0,10))+' '+v.ts.slice(11),'Observación':v.obs,'Rodam. antes':v.antes?.cr||'','Rodam. ahora':v.ahora?.cr||'','Cuota vencida antes':v.antes?.cv??'','Cuota vencida ahora':v.ahora?.cv??'',Estado:E[v.est],Evidencia:v.ev||''})),`Compromisos_${S.mes}.xlsx`,'Compromisos');}
+
 function renderEstado(){const e=S.estado||{};const l=x=>x?new Date(x).toLocaleString('es-EC'):'—';
-  $('estadoCargas').innerHTML=`<div class="sumrow" style="margin:0"><div class="s">📋 Listado<b>${e.listado?fmt(e.listado.clientes,0)+' clientes':'—'}</b>${l(e.listado?.ts)}</div><div class="s">🔁 Refinanciamientos de ${MESES[+S.mes.slice(5)-1]}<b>${(()=>{const [d1,d2]=rangoMes(S.mes);let n=0,m=0;COBS.forEach(c=>refisDe(c.id,d1,d2).forEach(x=>{n++;m+=+x.saldo||0;}));return n+' créditos · '+m0(m);})()}</b>${l(e.refis?.ts)}</div><div class="s">📈 Mora proyectada<b>${S.mora.length} corte(s)</b>${S.mora.length?'último '+dmy(S.mora[S.mora.length-1].id):'—'}</div><div class="s">💵 Cobro efectivo<b>${(()=>{const u=cobroUlt(S.mes);return u?m0(u.filas.reduce((t,f)=>t+f.t,0)):'—';})()}</b>${S.cobro.length?'último '+dmy(S.cobro[S.cobro.length-1].id):'—'}</div></div>`;}
+  $('estadoCargas').innerHTML=`<div class="sumrow" style="margin:0"><div class="s">📋 Listado<b>${e.listado?fmt(e.listado.clientes,0)+' clientes':'—'}</b>${l(e.listado?.ts)}</div><div class="s">🔁 Refinanciamientos de ${MESES[+S.mes.slice(5)-1]}<b>${(()=>{const [d1,d2]=rangoMes(S.mes);let n=0,m=0;COBS.forEach(c=>refisDe(c.id,d1,d2).forEach(x=>{n++;m+=+x.saldo||0;}));return n+' créditos · '+m0(m);})()}</b>${l(e.refis?.ts)}</div><div class="s">📈 Mora proyectada<b>${S.mora.length} corte(s)</b>${S.mora.length?'último '+dmy(S.mora[S.mora.length-1].id):'—'}</div><div class="s">📝 Gestiones<b>${(()=>{let v=0;Object.values(S.gest||{}).forEach(a=>v+=a.length);return fmt(v,0)+' visitas';})()}</b>${mesNombre(S.mes)}</div><div class="s">💵 Cobro efectivo<b>${(()=>{const u=cobroUlt(S.mes);return u?m0(u.filas.reduce((t,f)=>t+f.t,0)):'—';})()}</b>${S.cobro.length?'último '+dmy(S.cobro[S.cobro.length-1].id):'—'}</div></div>`;}
 
 /* =====================================================================
    SUPERVISOR · EQUIPO (accesos)
@@ -1330,6 +1459,13 @@ function renderCMetaMora(){
   $('cMetaMora').innerHTML=`<h3>🎯 Mis metas de mora</h3><div class="sub">Mora proyectada · corte ${dmy(u)} · saldo inicial ${m$(r.si)}</div>
     <div class="b" style="margin-top:6px;color:var(--purple)">📅 Te quedan ${dl} días laborales</div>`+
     bloque('Libera','✅',r.pl,m.ml,r.lib,r.mL,r.falL,r.ayerL,r.hoyL,'ok')+bloque('Contiene total','🛡️',r.pct,m.mc,r.ct,r.mC,r.falC,r.ayerC,r.hoyC,'')+'';}
+function renderCGest(){const id=S.cob,arr=S.gest[id]||[];const q=calidadDe(arr);const cl=(S.listado[id]?.cl)||[];const st=gestSet(id);const sin=cl.filter(x=>!st.has(String(x.cod)));
+  const big=(t,v,c)=>`<div style="display:flex;justify-content:space-between;font-size:16px;font-weight:800;padding:6px 0;border-bottom:1px solid #eef1f7;color:${c}"><span>${t}</span><span>${v}</span></div>`;
+  $('cGest').innerHTML=`<h3>📝 Mis gestiones del mes</h3><div class="sub">${q.n?`${q.n} visitas a ${q.cli} clientes`:'Tu supervisor aún no carga las gestiones de este mes.'}</div>
+    <div class="b" style="color:var(--navy);margin:4px 0 6px">📞 Calidad del contacto</div>${barCalidad(q)}
+    <div style="margin-top:6px">${big('🟢 Directa (titular)',`${pctTxt(q.pD,0)} · ${q.D}`,'#166534')}${big('🟡 Indirecta (familiar/vecino)',`${pctTxt(q.pI,0)} · ${q.I}`,'#854d0e')}${big('🔴 No gestión',`${pctTxt(q.pN,0)} · ${q.N}`,'#991b1b')}</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;background:#fef2f2;border-radius:12px;padding:12px"><div><div class="xs b" style="color:#991b1b">🚫 CLIENTES SIN GESTIONAR</div><div style="font:800 24px Montserrat,Inter,sans-serif;color:#991b1b">${sin.length} <span style="font-size:14px">de ${cl.length}</span></div><div class="xs mut">saldo ${m0(sin.reduce((t,x)=>t+x.sc,0))}</div></div>
+    <button class="btn red sm" onclick="cView='singes';cPage=0;goTab('c-cartera')">Ver lista</button></div>`;}
 function renderCInicio(){
   renderCMetaMora();renderCCobro();
   const id=S.cob,c=COB_BY_ID[id],m=metaDe(id),mes=S.mes,ag=agregRegs(S.regs,mes)[id],dm=diasMes(mes),dt=diaTranscurrido(mes),ritmo=dt/dm,rest=Math.max(1,dm-dt+1);
