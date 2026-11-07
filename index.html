@@ -435,7 +435,7 @@ canvas{max-width:100%}
     <h3>Registrar retiro</h3><div class="sub">Anota el monto que recuperaste. Se refleja al instante en tu avance y en el panel del supervisor.</div>
     <div class="tipo-sel" style="grid-template-columns:1fr"><button id="tpR" class="r on" style="pointer-events:none">🔵 Retiro<small>Monto recuperado</small></button></div>
     
-    <div class="fld"><label>Monto ($)</label><input id="rgMonto" class="inp monto" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0,00"></div>
+    <div class="fld"><label>Monto ($)</label><input id="rgMonto" class="inp monto" type="text" readonly tabindex="-1" placeholder="0,00" style="background:#f4f7fc;cursor:not-allowed"><div class="xs b" style="color:var(--blue);margin-top:5px;text-align:center">🔎 Busca el cliente y selecciona el crédito que retiraste</div></div>
     <div class="fld"><label>Cliente (busca por nombre o cédula)</label><input id="rgCliQ" class="inp" placeholder="Toca aquí para ver tus clientes o escribe nombre/cédula" oninput="buscarCli()" onfocus="buscarCli()" autocomplete="off"><div id="rgCliRes"></div><div id="rgCliSel"></div></div>
     <div class="fld"><label>Fecha</label><input id="rgFecha" class="inp" type="date"></div>
     <div class="fld"><label>Nota (opcional)</label><input id="rgNota" class="inp" maxlength="140" placeholder="Ej.: abono, nro. de recibo"></div>
@@ -1377,13 +1377,13 @@ function elegirCli(cod){const x=((S.listado[S.cob]?.cl)||[]).find(y=>y.cod===cod
     <div class="mini" style="margin-top:6px"><span>Seleccionados: <b id="credN">0</b></span><span>Total Saldo Crédito Final: <b id="credT">$0,00</b></span></div>`:''}
   </div>`;
   actCred();}
-function quitarCli(){cliSel=null;$('rgCliSel').innerHTML='';}
+function quitarCli(){cliSel=null;$('rgCliSel').innerHTML='';$('rgMonto').value='';}
 function togCred(i,on){if(!cliSel)return;on?cliSel.sel.add(i):cliSel.sel.delete(i);actCred();}
 function actCred(){if(!cliSel||!$('credN'))return;const t=[...cliSel.sel].reduce((a,i)=>a+cliSel.creds[i].s,0);
-  $('credN').textContent=cliSel.sel.size;$('credT').textContent=m$(t);if(cliSel.sel.size)$('rgMonto').value=t.toFixed(2);}
+  $('credN').textContent=cliSel.sel.size;$('credT').textContent=m$(t);$('rgMonto').value=cliSel.sel.size?t.toFixed(2):'';}
 function credsSel(){return cliSel?[...cliSel.sel].sort().map(i=>({cc:cliSel.creds[i].cc,s:cliSel.creds[i].s,o:cliSel.creds[i].o})):[];}
 function preRegistrar(){const mt=+$('rgMonto').value;const dia=$('rgFecha').value||hoyYMD();
-  if(!(mt>0))return toast('Escribe el monto');if(cliSel&&cliSel.creds.length>1&&!cliSel.sel.size)return toast('Selecciona al menos un crédito del cliente');if(mt>50000)return toast('Revisa el monto');if(dia>hoyYMD())return toast('La fecha no puede ser futura');
+  if(!cliSel||!cliSel.sel||!cliSel.sel.size)return toast('🔎 Busca el cliente y selecciona el crédito que retiraste');if(!(mt>0))return toast('🔎 Busca el cliente y selecciona el crédito que retiraste');if(cliSel&&cliSel.creds.length>1&&!cliSel.sel.size)return toast('Selecciona al menos un crédito del cliente');if(mt>50000)return toast('Revisa el monto');if(dia>hoyYMD())return toast('La fecha no puede ser futura');
   if(dia.slice(0,7)!==S.mes)return toast('Solo puedes registrar en '+mesNombre(S.mes));
   modal(`<h3>Confirmar registro</h3><p>${tipoReg==='refi'?'🟡 <b>Refinanciamiento</b>':'🔵 <b>Retiro</b>'} del ${dmy(dia)}</p><div class="monto" style="margin:10px 0">${m$(mt)}</div>
     <p class="sm">${cliSel?'Cliente: <b>'+esc(cliSel.nom)+'</b>':'<span class="mut">Sin cliente seleccionado</span>'}</p>${credsSel().length?`<div class="sm">${credsSel().map(c=>`• Crédito <b>${esc(c.cc)}</b> · ${m$(c.s)}`).join('<br>')}</div>`:''}
