@@ -529,7 +529,7 @@ function claveCobrador(v){
 }
 const COB_BY_KEY=new Map(COBS.map(c=>[claveCobrador(c.full),c]));
 const COB_BY_ID=Object.fromEntries(COBS.map(c=>[c.id,c]));
-function cobDe(nombre){return COB_BY_KEY.get(claveCobrador(nombre))||null;}
+const _cobMemo=new Map();function cobDe(nombre){const k=String(nombre??'');if(_cobMemo.has(k))return _cobMemo.get(k);const v=COB_BY_KEY.get(claveCobrador(k))||null;_cobMemo.set(k,v);return v;}
 function parseDate(v){
   if(v===null||v===undefined||v==='')return null;
   if(v instanceof Date)return isNaN(v)?null:new Date(Date.UTC(v.getFullYear(),v.getMonth(),v.getDate()));
@@ -1097,21 +1097,25 @@ function procesarListado(){
     (presentes.length<COBS.length?`<br>ℹ️ El archivo trae solo ${presentes.length} cobrador(es): <b>${presentes.map(i=>COB_BY_ID[i].corto).join(', ')}</b>. Solo se actualizará su listado; los demás <b>se mantienen como están</b>.`:(faltan.size?`<br>⚠️ Sin filas después de filtros: ${[...faltan].map(i=>COB_BY_ID[i].corto).join(', ')}`:''))+`</div><button class="btn gold block" style="margin-top:10px" onclick="publicarListado(this)">🚀 Publicar listado en línea</button>`;
 }
 async function publicarListado(b){if(!LS_OUT)return;if(b)b.disabled=true;
+  const tot0=LS_OUT.presentes.length*2+2;let hechos=0;const avance=t=>{if(b)b.innerHTML=`⏳ ${t} (${Math.min(99,Math.round(hechos/tot0*100))}%)`;};const paso=()=>{hechos++;avance('Publicando…');};avance('Publicando…');
   try{const ts=Date.now();
     const P=COBS.filter(c=>LS_OUT.presentes.includes(c.id));
-    for(const c of P){await DB.set('listado/'+c.id,{cl:LS_OUT.porCob[c.id],ts,corte:LS_OUT.corte});S.listado[c.id]={cl:LS_OUT.porCob[c.id],ts,corte:LS_OUT.corte};}
+    await Promise.all(P.map(c=>DB.set('listado/'+c.id,{cl:LS_OUT.porCob[c.id],ts,corte:LS_OUT.corte}).then(()=>{S.listado[c.id]={cl:LS_OUT.porCob[c.id],ts,corte:LS_OUT.corte};paso();})));
     const totCli=COBS.reduce((t,c)=>t+((S.listado[c.id]?.cl)||[]).length,0);
     const est={listado:{ts,filas:LS_OUT.filas,clientes:totCli,corte:LS_OUT.corte}};
     const fecha=$('lsFecha')?.value||hoyYMD();const prevRes=(S.lsHist.find(h=>h.id===fecha)||{}).cobs||{};const res={...prevRes};
-    for(const c of P){const a=LS_OUT.porCob[c.id];await DB.set('listadohist/'+fecha+'__'+c.id,{cl:a,fecha,cob:c.id,ts,corte:LS_OUT.corte});
+    await Promise.all(P.map(c=>DB.set('listadohist/'+fecha+'__'+c.id,{cl:LS_OUT.porCob[c.id],fecha,cob:c.id,ts,corte:LS_OUT.corte}).then(paso)));
+    for(const c of P){const a=LS_OUT.porCob[c.id];
       res[c.id]={n:a.length,sc:+a.reduce((t,x)=>t+x.sc,0).toFixed(2),cv:+a.reduce((t,x)=>t+x.cv,0).toFixed(2),s1:a.filter(x=>x.nro===1).length,s2:a.filter(x=>x.nro===2).length,s3:a.filter(x=>x.nro===3).length,
         mej:a.filter(x=>x.rod==='Mejora').length,man:a.filter(x=>x.rod==='Mantiene').length,det:a.filter(x=>x.rod==='Deteriora').length};}
     await DB.set('listadoresumen/'+fecha,{fecha,cobs:res,ts});{const i=S.lsHist.findIndex(h=>h.id===fecha);const d={id:fecha,fecha,cobs:res};i>=0?S.lsHist[i]=d:S.lsHist.push(d);S.lsHist.sort((a,b)=>a.id.localeCompare(b.id));}
     let extra='';
+    avance('Guardando refinanciamientos…');
     if($('lsTambienRefi')?.checked){const r=extraerRefis(LS_RAW);await guardarRefis(r,ts,fecha);est.refis={ts,n:r.n};extra=` y ${r.n} refinanciamientos`;}
     await DB.set('config/estado',est,true);Object.assign(S.estado,est);
+    hechos=tot0;if(b)b.innerHTML='✅ Publicado';
     toast(`✅ Listado publicado${extra}`);$('lsRes').innerHTML+=`<div class="okbox">✅ Publicado ${new Date(ts).toLocaleString('es-EC')}. Se actualizó: ${P.map(c=>c.corto).join(', ')}.</div>`;renderEstado();
-  }catch(e){console.error(e);toast('No se pudo publicar: '+e.message);if(b)b.disabled=false;}}
+  }catch(e){console.error(e);toast('No se pudo publicar: '+e.message);if(b){b.disabled=false;b.innerHTML='🚀 Publicar listado en línea';}}}
 
 /* ---- 2. Refinanciamientos ---- */
 function extraerRefis(rows){const por={};const presentes=new Set();let n=0;const mesAct=hoyYMD().slice(0,7),hoyS=hoyYMD();
@@ -1123,13 +1127,13 @@ function extraerRefis(rows){const por={};const presentes=new Set();let n=0;const
       fc:ymdUTC(fc),saldo:+num(r['Saldo Crédito Final']).toFixed(2),cal:normCalif(r['Calificación Cliente Mensual']),tienda:String(r['Tienda Factura']||'').trim(),linea:String(r['Línea Producto']||'').trim()});n++;});
   return {por,presentes,n};}
 async function guardarRefis(r,ts,fecha){fecha=fecha||hoyYMD();let nuevos=0,cancel=0;
-  for(const id of r.presentes){
+  await Promise.all([...r.presentes].map(async id=>{
     const prev=new Map((S.refis[id]||[]).map(x=>[x.cc,x]));const vistos=new Set();
     (r.por[id]||[]).forEach(x=>{vistos.add(x.cc);const o=prev.get(x.cc);
       if(o){prev.set(x.cc,{...o,...x,saldo:Math.max(+o.saldo||0,x.saldo),ult:x.saldo,cancel:false,visto:fecha});}
       else{prev.set(x.cc,{...x,ult:x.saldo,cancel:false,alta:fecha,visto:fecha});nuevos++;}});
     const mesAct=hoyYMD().slice(0,7);prev.forEach((o,cc)=>{if(!vistos.has(cc)&&!o.cancel&&(o.fc||'').slice(0,7)===mesAct){prev.set(cc,{...o,cancel:true,ult:0,cancelFecha:fecha});cancel++;}});
-    const items=[...prev.values()];await DB.set('refis/'+id,{items,ts});S.refis[id]=items;}
+    const items=[...prev.values()];await DB.set('refis/'+id,{items,ts});S.refis[id]=items;}));
   // foto diaria de refinanciamientos del mes
   const mes=fecha.slice(0,7),[d1,d2]=rangoMes(mes),cobs={};
   COBS.forEach(c=>{const it=(S.refis[c.id]||[]).filter(x=>x.fc>=d1&&x.fc<=d2);cobs[c.id]={n:it.length,m:+it.reduce((a,x)=>a+(+x.saldo||0),0).toFixed(2)};});
