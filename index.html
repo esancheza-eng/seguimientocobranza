@@ -475,6 +475,7 @@ canvas{max-width:100%}
     <div class="fbar"><input id="cQ" class="inp" placeholder="🔎 Cliente o cédula" oninput="cPage=0;renderCCartera()" style="flex:1;min-width:180px">
       <select id="cCal" class="inp" onchange="cPage=0;renderCCartera()"><option value="">Calificación</option></select></div>
     <div class="sumrow" id="cSum"></div>
+    <div class="chips" id="cOrd" style="margin-bottom:10px;align-items:center"></div>
     <div class="tw"><table id="tbC"></table></div>
     <div class="pager" id="cPager"></div>
   </div>
@@ -1048,7 +1049,13 @@ function filaCli(x,i,conCob){const w=telWa(x.tel);
   <td class="nowrap">${w?`<a class="wa-i" target="_blank" rel="noopener" href="https://wa.me/${w}" title="WhatsApp ${esc(x.tel)}">💬</a> <a class="tel-i" href="tel:${esc(x.tel)}" title="Llamar">📞</a>`:'<span class="xs mut">sin cel.</span>'}</td></tr>`;}
 function cardCli(x){const w=telWa(x.tel);return `<div style="display:flex;justify-content:space-between;gap:8px"><div style="min-width:0"><div class="b">${esc(x.nom)}</div><div style="font-size:13px;font-weight:700;color:#1e3a8a">🪪 ${esc(x.ced)} · 📄 ${x.nc} crédito${x.nc>1?'s':''}</div><div class="xs mut">venc. ${dmy(x.fvf)} · ${x.dias} días</div></div><div class="right"><div class="b">${m$(x.sc)}</div><div class="xs mut">vencido ${m$(x.cv)}</div><div class="xs b" style="color:#7c2d12">valor cuota ${m$(x.vc)}</div></div></div>
   <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px"><span class="xs mut">Mensual</span>${calBadge(x.cm)}<span class="xs mut">Rodam.</span>${calBadge(x.cr)} ${sieBadge(SIE(x))} ${rodBadge(x.rod)}${x.ref?' <span class="badge t-refi">Refinanciado</span>':''}<span style="margin-left:auto">${w?`<a class="wa-i" target="_blank" rel="noopener" href="https://wa.me/${w}">💬</a> <a class="tel-i" href="tel:${esc(x.tel)}">📞</a>`:''}</span></div>`;}
-function thCli(conCob){return `<thead><tr><th>#</th><th>Cliente</th>${conCob?'<th>Cobrador</th>':''}<th class="center">Cal. mensual</th><th class="center">Días</th><th class="center">Calif. Rodam.</th><th>Venc. más antiguo</th><th class="num">Cuota vencida</th><th class="num">Valor cuota</th><th class="num">Saldo crédito</th><th class="center">Cuota más vencida</th><th>Rodamiento</th><th>Contacto</th></tr></thead>`;}
+// Orden por columna (Cuota vencida, Valor cuota, Saldo crédito): mayor→menor / menor→mayor
+const ORD={sup:{k:'',d:-1},cob:{k:'',d:-1}};
+function thS(k,t,conCob){const o=ORD[conCob?'sup':'cob'];const on=o.k===k;return `<th class="num s" style="cursor:pointer;user-select:none${on?';color:var(--navy)':''}" title="Ordenar" onclick="ordenar('${conCob?'sup':'cob'}','${k}')">${t} ${on?(o.d<0?'▼':'▲'):'<span class="mut">⇅</span>'}</th>`;}
+function ordenar(q,k){const o=ORD[q];if(o.k===k)o.d=-o.d;else{o.k=k;o.d=-1;}if(q==='sup'){lsPage=0;renderListado();}else{cPage=0;renderCCartera();}}
+function aplicaOrden(arr,q){const o=ORD[q];if(!o.k)return arr;return [...arr].sort((a,b)=>o.d*((+a[o.k]||0)-(+b[o.k]||0)));}
+function ordenChips(q){const o=ORD[q];const c=(k,t)=>`<span class="chip ${o.k===k?'on':''}" onclick="ordenar('${q}','${k}')">${t} ${o.k===k?(o.d<0?'▼ mayor a menor':'▲ menor a mayor'):'⇅'}</span>`;return `<span class="sm b" style="color:var(--navy)">Ordenar:</span> ${c('cv','Cuota vencida')}${c('vc','Valor cuota')}${c('sc','Saldo crédito')}`;}
+function thCli(conCob){return `<thead><tr><th>#</th><th>Cliente</th>${conCob?'<th>Cobrador</th>':''}<th class="center">Cal. mensual</th><th class="center">Días</th><th class="center">Calif. Rodam.</th><th>Venc. más antiguo</th>${thS("cv","Cuota vencida",conCob)}${thS("vc","Valor cuota",conCob)}${thS("sc","Saldo crédito",conCob)}<th class="center">Cuota más vencida</th><th>Rodamiento</th><th>Contacto</th></tr></thead>`;}
 function pager(id,total,page,fn){const pages=Math.ceil(total/PAGE);if(pages<=1){$(id).innerHTML='';return;}
   $(id).innerHTML=`<span class="mut">${page*PAGE+1}–${Math.min(total,(page+1)*PAGE)} de ${fmt(total,0)}</span><button class="btn ghost sm" ${page<=0?'disabled':''} onclick="${fn}(${page-1})">‹</button><button class="btn ghost sm" ${page>=pages-1?'disabled':''} onclick="${fn}(${page+1})">›</button>`;}
 function lsGo(p){lsPage=p;renderListado();}function cGo(p){cPage=p;renderCCartera();}
@@ -1071,7 +1078,7 @@ function renderListado(){
   $('lsQv').innerHTML=qvHtml(lsView,'setLsView');
   const cob=$('lsCob').value;let arr=clientesDe(cob?[cob]:COBS.map(c=>c.id));
   arr=aplicaFiltros(arr,$('lsQ').value,$('lsCal').value,$('lsRod').value,$('lsSie').value);
-  arr=filtrarVista(arr,lsView);window._lsArr=arr;
+  arr=aplicaOrden(filtrarVista(arr,lsView),'sup');window._lsArr=arr;
   $('lsSum').innerHTML=sumHtml(arr);
   $('tbLs').innerHTML=thCli(true)+'<tbody>'+(arr.length?arr.slice(lsPage*PAGE,(lsPage+1)*PAGE).map((x,i)=>filaCli(x,lsPage*PAGE+i+1,true)).join(''):'<tr><td colspan="13" class="center mut" style="padding:28px">Sin clientes para mostrar</td></tr>')+'</tbody>';
   pager('lsPager',arr.length,lsPage,'lsGo');
@@ -1534,7 +1541,7 @@ function renderCCartera(){
   const d=S.listado[S.cob];$('cLsSub').textContent=d?`Actualizado ${new Date(d.ts).toLocaleString('es-EC')}`:'Tu supervisor aún no publica el listado.';
   $('cQv').innerHTML=qvHtml(cView,'setCView');
   if($('cCal').options.length<=1)$('cCal').innerHTML='<option value="">Calificación</option>'+CAL_ORDER.map(c=>`<option>${c}</option>`).join('');
-  let arr=clientesDe([S.cob]);arr=aplicaFiltros(arr,$('cQ').value,$('cCal').value,'','');arr=filtrarVista(arr,cView);
+  let arr=clientesDe([S.cob]);arr=aplicaFiltros(arr,$('cQ').value,$('cCal').value,'','');arr=aplicaOrden(filtrarVista(arr,cView),'cob');$('cOrd').innerHTML=ordenChips('cob');
   $('cSum').innerHTML=sumHtml(arr);
   const pg=arr.slice(cPage*PAGE,(cPage+1)*PAGE);
   if(window.innerWidth<700){$('tbC').innerHTML='<tbody>'+(pg.length?pg.map(x=>`<tr><td>${cardCli(x)}</td></tr>`).join(''):'<tr><td class="center mut" style="padding:28px">Sin clientes para mostrar</td></tr>')+'</tbody>';}
