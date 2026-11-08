@@ -1166,6 +1166,7 @@ async function abrirCorreos(){if(!CORREOS){try{const d=await DB.get('config/corr
   <label class="sm b" style="color:var(--navy)">CC (opcional)</label>
   <input class="inp" id="corCc" placeholder="copia@marcimex.com" value="${esc(CORREOS.cc||'')}" style="width:100%;margin:4px 0 10px" onchange="guardarCorreo()">
   <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px"><button class="btn sm" onclick="enviarCorreo('web')">Outlook web</button><button class="btn ghost sm" onclick="enviarCorreo('app')">Outlook escritorio</button><button class="btn ghost sm" onclick="copiarCorreo()">📋 Copiar</button></div>
+  <div id="corAviso" class="info hidden" style="margin:-4px 0 12px"></div>
   <div id="corLista"></div>
   <div style="text-align:right;margin-top:10px"><button class="btn ghost" onclick="closeModal()">Cerrar</button></div>`);corLista();}
 function corLista(){_corGrupos=gruposRango(_corDesde,_corHasta);const T=corTotales(_corGrupos);
@@ -1186,8 +1187,9 @@ function enviarCorreo(modo){const to=normEmails($('corPara').value),cc=normEmail
   const txt=correoTexto(_corGrupos),bo=encodeURIComponent(txt);
   const base=modo==='web'?`https://outlook.office.com/mail/deeplink/compose?to=${encodeURIComponent(lst(to).join(';'))}${cc?`&cc=${encodeURIComponent(lst(cc).join(';'))}`:''}&subject=${su}`
     :`mailto:${lst(to).join(',')}?${cc?`cc=${encodeURIComponent(lst(cc).join(','))}&`:''}subject=${su}`;
-  const largo=bo.length>(modo==='web'?7000:1800);let url=base;
-  if(largo){copiarTextoSync(txt);}else url+=`&body=${bo}`;
+  const largo=bo.length>(modo==='web'?12000:1800);let url=base;
+  const copiado=copiarTextoSync(txt);if(!largo)url+=`&body=${bo}`;
+  const av=$('corAviso');if(av){av.innerHTML=largo?'📋 <b>El correo es largo y no cabe en el enlace:</b> ya está copiado. En Outlook haz clic en el cuerpo del mensaje y presiona <b>Ctrl + V</b>.':'✉️ El texto se envió a Outlook. <b>Si el cuerpo aparece vacío</b>, haz clic en él y presiona <b>Ctrl + V</b> (ya está copiado).';av.classList.remove('hidden');}
   if(modo==='web')window.open(url,'_blank');else location.href=url;
   toast(largo?'📋 El correo es largo: ya está copiado. En Outlook haz clic en el cuerpo y presiona Ctrl + V':'✉️ Correo listo en Outlook: revisa y presiona Enviar',5000);}
 async function copiarCorreo(){try{await navigator.clipboard.writeText(correoAsunto()+'\n\n'+correoTexto(_corGrupos));toast('📋 Correo copiado: pégalo en Outlook');}catch(e){toast('No se pudo copiar');}}
