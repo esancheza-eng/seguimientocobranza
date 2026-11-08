@@ -1115,8 +1115,9 @@ let CORREOS=null,_corGrupos=[],TCRED=null;
 function tiendaDeCred(cob,cc,t){if(t)return t;const l=S.listado[cob];const c=l&&(l.cl||[]).flatMap(x=>x.creds||[]).find(k=>k.cc===cc);if(c&&c.t)return c.t;
   const i=TCRED&&TCRED.m?TCRED.m[cc]:undefined;return (i!=null&&TCRED.n[i])||'SIN TIENDA';}
 /* guarda (sin borrar) la tienda factura de cada crédito del archivo: sirve para retiros de clientes que ya salieron del listado */
+function credsListado(){return Object.values(LS_OUT?.porCob||{}).flat().flatMap(x=>x.creds||[]).map(c=>({cc:c.cc,t:c.t}));}
 async function guardarTiendasCred(rows){const d=(await DB.get('config/tiendascred'))||{};const n=d.n||[],m=d.m||{};let nuevos=0;
-  (rows||[]).forEach(r=>{const cc=String(r['Cod Credito']??'').trim(),t=String(r['Tienda Factura']||'').trim();if(!cc||!t)return;let i=n.indexOf(t);if(i<0){n.push(t);i=n.length-1;}if(m[cc]!==i){if(m[cc]==null)nuevos++;m[cc]=i;}});
+  (rows||[]).forEach(r=>{const cc=String(r.cc??'').trim(),t=String(r.t||'').trim();if(!cc||!t)return;let i=n.indexOf(t);if(i<0){n.push(t);i=n.length-1;}if(m[cc]!==i){if(m[cc]==null)nuevos++;m[cc]=i;}});
   await DB.set('config/tiendascred',{n,m,ts:Date.now()});TCRED={n,m};return nuevos;}
 function gruposPendientes(){const g={};
   S.regs.filter(r=>r.tipo==='retiro'&&r.baja!=='SI').sort((a,b)=>(a.dia||'').localeCompare(b.dia||'')).forEach(r=>{
@@ -1226,7 +1227,7 @@ function procesarListado(){
     (presentes.length<COBS.length?`<br>ℹ️ El archivo trae solo ${presentes.length} cobrador(es): <b>${presentes.map(i=>COB_BY_ID[i].corto).join(', ')}</b>. Solo se actualizará su listado; los demás <b>se mantienen como están</b>.`:(faltan.size?`<br>⚠️ Sin filas después de filtros: ${[...faltan].map(i=>COB_BY_ID[i].corto).join(', ')}`:''))+`</div><button class="btn gold block" style="margin-top:10px" onclick="publicarListado(this)">🚀 Publicar listado en línea</button>`;
 }
 async function publicarListado(b){if(!LS_OUT)return;if(b)b.disabled=true;
-  if($('lsSoloTiendas')?.checked){try{if(b)b.innerHTML='⏳ Guardando tiendas…';const nv=await guardarTiendasCred(LS_RAW);if(b)b.innerHTML='✅ Tiendas guardadas';toast(`✅ Tiendas factura guardadas (${nv} créditos nuevos)`);$('lsRes').innerHTML+=`<div class="okbox">✅ Se guardaron las tiendas factura de este archivo (${nv} créditos nuevos). La cartera publicada no cambió.</div>`;}catch(e){console.error(e);toast('No se pudo guardar: '+e.message);if(b){b.disabled=false;b.innerHTML='🚀 Publicar listado en línea';}}return;}
+  if($('lsSoloTiendas')?.checked){try{if(b)b.innerHTML='⏳ Guardando tiendas…';const nv=await guardarTiendasCred(credsListado());if(b)b.innerHTML='✅ Tiendas guardadas';toast(`✅ Tiendas factura guardadas (${nv} créditos nuevos)`);$('lsRes').innerHTML+=`<div class="okbox">✅ Se guardaron las tiendas factura de este archivo (${nv} créditos nuevos). La cartera publicada no cambió.</div>`;}catch(e){console.error(e);toast('No se pudo guardar: '+e.message);if(b){b.disabled=false;b.innerHTML='🚀 Publicar listado en línea';}}return;}
   const tot0=LS_OUT.presentes.length*2+2;let hechos=0;const avance=t=>{if(b)b.innerHTML=`⏳ ${t} (${Math.min(99,Math.round(hechos/tot0*100))}%)`;};const paso=()=>{hechos++;avance('Publicando…');};avance('Publicando…');
   try{const ts=Date.now();
     const P=COBS.filter(c=>LS_OUT.presentes.includes(c.id));
@@ -1242,7 +1243,7 @@ async function publicarListado(b){if(!LS_OUT)return;if(b)b.disabled=true;
     let extra='';
     avance('Guardando refinanciamientos…');
     if($('lsTambienRefi')?.checked){const r=extraerRefis(LS_RAW);await guardarRefis(r,ts,fecha);est.refis={ts,n:r.n};extra=` y ${r.n} refinanciamientos`;}
-    try{await guardarTiendasCred(LS_RAW);}catch(e){console.error(e);}
+    try{await guardarTiendasCred(credsListado());}catch(e){console.error(e);}
     await DB.set('config/estado',est,true);Object.assign(S.estado,est);
     hechos=tot0;if(b)b.innerHTML='✅ Publicado';
     toast(`✅ Listado publicado${extra}`);$('lsRes').innerHTML+=`<div class="okbox">✅ Publicado ${new Date(ts).toLocaleString('es-EC')}. Se actualizó: ${P.map(c=>c.corto).join(', ')}.</div>`;renderEstado();
