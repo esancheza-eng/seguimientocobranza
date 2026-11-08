@@ -389,7 +389,7 @@ canvas{max-width:100%}
 
 <section class="sec" id="s-registros">
   <div class="card">
-    <div class="ch"><div><h3>Registros de los cobradores</h3><div class="sub">Se actualiza solo cada vez que un cobrador registra</div></div><button class="btn ghost sm" onclick="exportRegs()">⬇ Excel</button></div>
+    <div class="ch"><div><h3>Registros de los cobradores</h3><div class="sub">Se actualiza solo cada vez que un cobrador registra</div></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" onclick="abrirCorreos()">✉️ Correos a tiendas</button><button class="btn ghost sm" onclick="exportRegs()">⬇ Excel</button></div></div>
     <div class="fbar">
       <select id="rgCob" class="inp" onchange="renderRegs()"></select>
       <select id="rgTipo" class="inp" onchange="renderRegs()"><option value="">Tipo: todos</option><option value="retiro">Retiros</option><option value="refi">Refinanciamientos</option></select>
@@ -1105,16 +1105,50 @@ function renderRegs(){
   $('rgSum').innerHTML=`<div class="s">Registros<b>${arr.length}</b></div><div class="s">Retiros<b>${m$(sr)}</b></div><div class="s">Refinanciamiento<b>${m$(sf)}</b></div>`;
   $('tbRegs').innerHTML='<thead><tr><th>Fecha</th><th>Hora registro</th><th>Cobrador</th><th>Tipo</th><th>Cliente</th><th>Nota</th><th>Dado de baja</th><th class="num">Monto</th><th></th></tr></thead><tbody>'+
     (arr.length?arr.map(r=>`<tr><td class="nowrap">${dmy(r.dia)}</td><td class="sm mut nowrap">${r.ts?new Date(tsMs(r.ts)).toLocaleString('es-EC'):'enviando…'}</td><td class="cobn nowrap">${esc(COB_BY_ID[r.cob]?.corto||r.cob)}</td>
-      <td><span class="badge ${r.tipo==='refi'?'t-refi':'t-retiro'}">${r.tipo==='refi'?'Refinanciamiento':'Retiro'}</span></td><td>${esc(r.cliente?.nom||'—')}<div class="xs mut">${esc(r.cliente?.ced||'')}</div>${r.cliente?.cm?`<div style="margin-top:2px">${calBadge(r.cliente.cm)} → ${calBadge(r.cliente.cr)} ${rodBadge(r.cliente.rod)}</div>`:''}${(r.cliente?.creditos||[]).length?`<div class="xs">${r.cliente.creditos.map(c=>`Créd. ${esc(c.cc)}: ${m$(c.s)}`).join(' · ')}</div>`:''}</td><td class="sm">${esc(r.nota||'')}</td>
+      <td><span class="badge ${r.tipo==='refi'?'t-refi':'t-retiro'}">${r.tipo==='refi'?'Refinanciamiento':'Retiro'}</span></td><td>${esc(r.cliente?.nom||'—')}<div class="xs mut">${esc(r.cliente?.ced||'')}</div>${r.cliente?.cm?`<div style="margin-top:2px">${calBadge(r.cliente.cm)} → ${calBadge(r.cliente.cr)} ${rodBadge(r.cliente.rod)}</div>`:''}${(r.cliente?.creditos||[]).length?`<div class="xs">${r.cliente.creditos.map(c=>`Créd. ${esc(c.cc)}: ${m$(c.s)} · 🏬 ${esc(tiendaDeCred(r.cob,c.cc,c.t))}`).join('<br>')}</div>`:''}</td><td class="sm">${esc(r.nota||'')}</td>
       <td>${(()=>{const v=r.baja==='SI'?'SI':'PENDIENTE';return `<select class="baja-sel baja-${v}" onchange="setBaja('${r.id}',this)"><option value="PENDIENTE"${v==='PENDIENTE'?' selected':''}>PENDIENTE</option><option value="SI"${v==='SI'?' selected':''}>SI</option></select>`;})()}</td>
       <td class="num b">${m$(r.monto)}</td><td><button class="btn ghost sm" onclick="borrarReg('${r.id}')">🗑</button></td></tr>`).join(''):'<tr><td colspan="9" class="center mut" style="padding:28px">Sin registros</td></tr>')+'</tbody>';
 }
+/* ---- correos a jefes de tienda (retiros pendientes de baja) ---- */
+let CORREOS=null,_corGrupos=[];
+function tiendaDeCred(cob,cc,t){if(t)return t;const l=S.listado[cob];const c=l&&(l.cl||[]).flatMap(x=>x.creds||[]).find(k=>k.cc===cc);return (c&&c.t)||'SIN TIENDA';}
+function gruposPendientes(){const g={};
+  S.regs.filter(r=>r.tipo==='retiro'&&r.baja!=='SI').sort((a,b)=>(a.dia||'').localeCompare(b.dia||'')).forEach(r=>{
+    const cr=(r.cliente?.creditos||[]);const lista=cr.length?cr:[{cc:'—',s:r.monto,t:''}];
+    lista.forEach(c=>{const t=tiendaDeCred(r.cob,c.cc,c.t);(g[t]=g[t]||{t,items:[],tot:0});g[t].items.push({r,c});g[t].tot+=+c.s||0;});});
+  return Object.values(g).sort((a,b)=>b.items.length-a.items.length);}
+function correoTexto(gs){const tot=gs.reduce((t,g)=>t+g.tot,0),n=gs.reduce((t,g)=>t+g.items.length,0);
+  const L=['Estimados Jefes de Tienda:','',`Por medio del presente, solicito aplicar la nota de crédito de los siguientes retiros de mercadería realizados por el equipo de cobranzas de la Zona Milagro, que se encuentran pendientes de dar de baja:`];
+  gs.forEach(g=>{L.push('',`TIENDA: ${g.t} (${g.items.length} crédito${g.items.length>1?'s':''} · ${m$(g.tot)})`);
+    g.items.forEach((it,i)=>{const r=it.r;L.push(`${i+1}) ${dmy(r.dia)} · Cliente: ${r.cliente?.nom||'—'} · Crédito: ${it.c.cc} · Valor: ${m$(+it.c.s||0)}`);L.push(`    Productos: ${r.nota||'—'} · Cobrador: ${COB_BY_ID[r.cob]?.corto||r.cob}`);});});
+  L.push('',`Total general: ${n} crédito${n>1?'s':''} · ${m$(tot)}`,'','Agradeceré confirmar por este medio una vez aplicada la nota de crédito.','','Saludos cordiales,','Asistente Virtual Automatizado','Cartera Zona Milagro');return L.join('\n');}
+function correoAsunto(){return `Retiros pendientes de nota de crédito – Zona Milagro – ${dmy(hoyYMD())}`;}
+async function abrirCorreos(){if(!CORREOS){try{const d=await DB.get('config/correos');CORREOS=d||{};}catch(e){CORREOS={};}}
+  _corGrupos=gruposPendientes();const n=_corGrupos.reduce((t,g)=>t+g.items.length,0),tot=_corGrupos.reduce((t,g)=>t+g.tot,0);
+  modal(`<h3 style="margin:0 0 4px">✉️ Correo de retiros pendientes de baja</h3><div class="sm mut" style="margin-bottom:12px">Un solo correo con todos los retiros pendientes, agrupados por la tienda de factura de cada crédito.</div>
+  ${n?`<label class="sm b" style="color:var(--navy)">Para (puedes pegar la lista tal como sale de Outlook)</label>
+  <input class="inp" id="corPara" placeholder="jefe1@marcimex.com; jefe2@marcimex.com" value="${esc(CORREOS.para||'')}" style="width:100%;margin:4px 0 8px" onchange="guardarCorreo()">
+  <label class="sm b" style="color:var(--navy)">CC (opcional)</label>
+  <input class="inp" id="corCc" placeholder="copia@marcimex.com" value="${esc(CORREOS.cc||'')}" style="width:100%;margin:4px 0 10px" onchange="guardarCorreo()">
+  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px"><button class="btn sm" onclick="enviarCorreo('web')">Outlook web</button><button class="btn ghost sm" onclick="enviarCorreo('app')">Outlook escritorio</button><button class="btn ghost sm" onclick="copiarCorreo()">📋 Copiar</button></div>
+  <div class="sm" style="margin-bottom:6px"><b>${n}</b> crédito${n>1?'s':''} pendiente${n>1?'s':''} · <b>${m$(tot)}</b> · ${_corGrupos.length} tienda${_corGrupos.length>1?'s':''}</div>
+  <div style="max-height:45vh;overflow:auto;border:1px solid #e4e9f2;border-radius:12px;padding:10px 12px">${_corGrupos.map(g=>`<div style="margin-bottom:10px"><div class="b" style="color:var(--navy)">🏬 ${esc(g.t)} <span class="sm mut">· ${g.items.length} · ${m$(g.tot)}</span></div>
+    <div class="xs mut">${g.items.map(it=>`${dmy(it.r.dia)} · ${esc(it.r.cliente?.nom||'—')} · Créd. ${esc(it.c.cc)} · ${m$(+it.c.s||0)}`).join('<br>')}</div></div>`).join('')}</div>`
+  :'<div class="center mut" style="padding:24px">No hay retiros pendientes de baja 🎉</div>'}
+  <div style="text-align:right;margin-top:10px"><button class="btn ghost" onclick="closeModal()">Cerrar</button></div>`);}
+function normEmails(x){const v=[...new Set((String(x||'').match(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g)||[]).map(e=>e.toLowerCase()))];return v.join('; ');}
+async function guardarCorreo(){$('corPara').value=normEmails($('corPara').value);$('corCc').value=normEmails($('corCc').value);CORREOS.para=$('corPara').value;CORREOS.cc=$('corCc').value;try{await DB.set('config/correos',{para:CORREOS.para,cc:CORREOS.cc},true);toast('Correos guardados');}catch(e){toast('No se pudo guardar el correo');}}
+function enviarCorreo(modo){const to=normEmails($('corPara').value),cc=normEmails($('corCc').value);if(!to){toast('Escribe el correo de destino');$('corPara').focus();return;}
+  if(CORREOS.para!==to||CORREOS.cc!==cc)guardarCorreo();const su=encodeURIComponent(correoAsunto()),bo=encodeURIComponent(correoTexto(_corGrupos));const lst=x=>x.split(/[;,]/).map(e=>e.trim()).filter(Boolean);
+  if(modo==='web')window.open(`https://outlook.office.com/mail/deeplink/compose?to=${encodeURIComponent(lst(to).join(';'))}${cc?`&cc=${encodeURIComponent(lst(cc).join(';'))}`:''}&subject=${su}&body=${bo}`,'_blank');
+  else location.href=`mailto:${lst(to).join(',')}?${cc?`cc=${encodeURIComponent(lst(cc).join(','))}&`:''}subject=${su}&body=${bo}`;}
+async function copiarCorreo(){try{await navigator.clipboard.writeText(correoAsunto()+'\n\n'+correoTexto(_corGrupos));toast('📋 Correo copiado: pégalo en Outlook');}catch(e){toast('No se pudo copiar');}}
 async function setBaja(id,el){const v=el.value==='SI'?'SI':'PENDIENTE';el.className='baja-sel baja-'+v;el.disabled=true;
   try{await DB.set('registros/'+id,{baja:v,bajaTs:Date.now()},true);const r=S.regs.find(x=>x.id===id);if(r)r.baja=v;toast(v==='SI'?'✅ Marcado como dado de baja':'Marcado como pendiente');}
   catch(e){console.error(e);toast('No se pudo guardar: '+(e.code||e.message));const r=S.regs.find(x=>x.id===id);const o=r&&r.baja==='SI'?'SI':'PENDIENTE';el.value=o;el.className='baja-sel baja-'+o;}
   el.disabled=false;}
 async function borrarReg(id){if(!confirm('¿Borrar este registro?'))return;try{await DB.del('registros/'+id);toast('Registro borrado');}catch(e){toast('No se pudo borrar (solo durante 24 h)');}}
-function exportRegs(){xlsxDownload((window._rgArr||[]).map(r=>({Fecha:dmy(r.dia),'Hora registro':r.ts?new Date(tsMs(r.ts)).toLocaleString('es-EC'):'',Cobrador:COB_BY_ID[r.cob]?.corto||r.cob,Tipo:r.tipo==='refi'?'Refinanciamiento':'Retiro',Cliente:r.cliente?.nom||'','Cédula':r.cliente?.ced||'','Cal. mensual':r.cliente?.cm||'','Cal. rodamiento':r.cliente?.cr||'','Categoría rodamiento':r.cliente?.rod||'','Créditos':(r.cliente?.creditos||[]).map(c=>c.cc+' ($'+c.s+')').join(', '),Nota:r.nota||'','Dado de baja':r.baja==='SI'?'SI':'PENDIENTE',Monto:r.monto})),`Registros_${S.mes}.xlsx`,'Registros');}
+function exportRegs(){xlsxDownload((window._rgArr||[]).map(r=>({Fecha:dmy(r.dia),'Hora registro':r.ts?new Date(tsMs(r.ts)).toLocaleString('es-EC'):'',Cobrador:COB_BY_ID[r.cob]?.corto||r.cob,Tipo:r.tipo==='refi'?'Refinanciamiento':'Retiro',Cliente:r.cliente?.nom||'','Cédula':r.cliente?.ced||'','Cal. mensual':r.cliente?.cm||'','Cal. rodamiento':r.cliente?.cr||'','Categoría rodamiento':r.cliente?.rod||'','Créditos':(r.cliente?.creditos||[]).map(c=>c.cc+' ($'+c.s+')').join(', '),'Tienda Factura':[...new Set((r.cliente?.creditos||[]).map(c=>tiendaDeCred(r.cob,c.cc,c.t)))].join(', '),Nota:r.nota||'','Dado de baja':r.baja==='SI'?'SI':'PENDIENTE',Monto:r.monto})),`Registros_${S.mes}.xlsx`,'Registros');}
 
 /* =====================================================================
    CARGA DE ARCHIVOS
@@ -1176,7 +1210,7 @@ function procesarListado(){
       sc+=num(r['Saldo Crédito Final']);vc+=num(r['Valor Cuota']);if(/refinanc/i.test(String(r['Origen Factura']||'')))ref=true;});
     const dias=c.minF?Math.floor((corte-c.minF.getTime())/86400000):'';const cr=califReal(dias);
     const oriC=o=>/refinanc/i.test(o)?'Refinanc.':/seguro/i.test(o)?'Seguro':/factur/i.test(o)?'Facturación':(o||'');
-    const creds=c.rows.map(r=>({cc:String(r['Cod Credito']??'').trim(),s:+num(r['Saldo Crédito Final']).toFixed(2),o:oriC(String(r['Origen Factura']||'')),n:Math.round(num(r['Nro Vencimiento Final']))||0,f:ymdUTC(r._fvf),l:String(r['Línea Producto']||'').trim()})).sort((a,b)=>b.s-a.s);
+    const creds=c.rows.map(r=>({cc:String(r['Cod Credito']??'').trim(),s:+num(r['Saldo Crédito Final']).toFixed(2),o:oriC(String(r['Origen Factura']||'')),t:String(r['Tienda Factura']||'').trim(),n:Math.round(num(r['Nro Vencimiento Final']))||0,f:ymdUTC(r._fvf),l:String(r['Línea Producto']||'').trim()})).sort((a,b)=>b.s-a.s);
     porCob[c.cob].push({cod:c.cod,nom:c.nom,ced:c.ced,tel:c.tel,dir:c.dir,zona:c.zona,cm:c.cm,cd:c.cd,dias,cr,fvi:ymdUTC(c.minI),fvf:ymdUTC(c.minF),
       cv:+cv.toFixed(2),sc:+sc.toFixed(2),vc:+vc.toFixed(2),nro:nro||0,sie:(()=>{let m=0;c.rows.forEach(r=>{const n=Math.round(num(r['Nro Vencimiento Final']));if(n>=1&&n<=3&&(!m||n<m))m=n;});return m;})(),rod:catRod(c.cm,cr),nc:c.rows.length,ref,creds});});
   const presentes=COBS.filter(c=>LS_RAW.some(r=>cobDe(r['Nombre Cobrador Actual'])===c)).map(c=>c.id);
@@ -1533,7 +1567,7 @@ function quitarCli(){cliSel=null;$('rgCliSel').innerHTML='';$('rgMonto').value='
 function togCred(i,on){if(!cliSel)return;on?cliSel.sel.add(i):cliSel.sel.delete(i);actCred();}
 function actCred(){if(!cliSel||!$('credN'))return;const t=[...cliSel.sel].reduce((a,i)=>a+cliSel.creds[i].s,0);
   $('credN').textContent=cliSel.sel.size;$('credT').textContent=m$(t);$('rgMonto').value=cliSel.sel.size?t.toFixed(2):'';}
-function credsSel(){return cliSel?[...cliSel.sel].sort().map(i=>({cc:cliSel.creds[i].cc,s:cliSel.creds[i].s,o:cliSel.creds[i].o})):[];}
+function credsSel(){return cliSel?[...cliSel.sel].sort().map(i=>({cc:cliSel.creds[i].cc,s:cliSel.creds[i].s,o:cliSel.creds[i].o,t:cliSel.creds[i].t||''})):[];}
 function preRegistrar(){const mt=+$('rgMonto').value;const dia=$('rgFecha').value||hoyYMD();
   if(!cliSel||!cliSel.sel||!cliSel.sel.size)return toast('🔎 Busca el cliente y selecciona el crédito que retiraste');if(!(mt>0))return toast('🔎 Busca el cliente y selecciona el crédito que retiraste');if(cliSel&&cliSel.creds.length>1&&!cliSel.sel.size)return toast('Selecciona al menos un crédito del cliente');if(mt>50000)return toast('Revisa el monto');if(dia>hoyYMD())return toast('La fecha no puede ser futura');
   if(dia.slice(0,7)!==S.mes)return toast('Solo puedes registrar en '+mesNombre(S.mes));
