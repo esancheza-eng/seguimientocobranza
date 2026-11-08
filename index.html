@@ -691,7 +691,13 @@ async function loginSup(){
 }
 async function logout(){S.unsub.forEach(f=>{try{f()}catch(e){}});S.unsub=[];
   try{sessionStorage.removeItem('czm_ses');}catch(e){}
-  if(!DEMO&&fauth)await fauth.signOut();location.reload();}
+  if(!DEMO&&fauth){
+    // borra la copia local de datos al salir (solo si no hay registros pendientes de enviar)
+    let limpio=false;try{if(navigator.onLine&&fsdb){limpio=await Promise.race([fsdb.waitForPendingWrites().then(()=>true),new Promise(r=>setTimeout(()=>r(false),6000))]);}}catch(e){}
+    await fauth.signOut();
+    if(limpio){try{await fsdb.terminate();await fsdb.clearPersistence();}catch(e){console.warn(e);}}
+  }
+  location.reload();}
 function boot(){
   initLogin();
   if(DEMO){let ses=null;try{ses=JSON.parse(sessionStorage.getItem('czm_ses')||'null');}catch(e){}
@@ -1510,7 +1516,7 @@ function appUrl(){return location.href.split('#')[0].split('?')[0];}
 function copiarLink(){navigator.clipboard?.writeText(appUrl()).then(()=>toast('🔗 Enlace copiado'));}
 async function crearAcceso(id,b){
   const c=COB_BY_ID[id];const ant=S.equipo[id];if(ant&&!confirm(`¿Generar un PIN nuevo para ${c.corto}? El anterior dejará de funcionar.`))return;
-  b.disabled=true;const pin=String(Math.floor(100000+Math.random()*900000));const ver=(ant?.ver||0)+1;const email=`${id}.${ver}@${DOM_COB}`;
+  b.disabled=true;const pin=String(100000+(crypto.getRandomValues(new Uint32Array(1))[0]%900000));const ver=(ant?.ver||0)+1;const email=`${id}.${ver}@${DOM_COB}`;
   let sec=null;
   try{sec=firebase.apps.find(a=>a.name==='sec')||firebase.initializeApp(FIREBASE_CONFIG,'sec');
     const cr=await sec.auth().createUserWithEmailAndPassword(email,'Zm#'+pin);const uid=cr.user.uid;await sec.auth().signOut();
@@ -1588,7 +1594,7 @@ function buscarCli(){const q=$('rgCliQ').value.trim().toUpperCase();
   const cl=(S.listado[S.cob]?.cl)||[];
   if(!cl.length){$('rgCliRes').innerHTML='<div class="xs mut" style="margin-top:6px">Tu supervisor aún no publica tu listado de clientes.</div>';return;}
   const r=cl.filter(x=>!q||x.nom.toUpperCase().includes(q)||String(x.ced).includes(q)).sort((a,b)=>b.sc-a.sc);
-  $('rgCliRes').innerHTML=r.length?`<div class="xs mut" style="margin:6px 0 2px">${q?r.length+' coincidencia(s)':'Tus '+cl.length+' clientes · toca uno o escribe para filtrar'}</div><div class="cli-res">${r.slice(0,60).map(x=>`<div onclick="elegirCli('${esc(x.cod)}')"><b>${esc(x.nom)}</b><div style="margin:3px 0">${calInfo(x)}</div><div class="xs mut">${esc(x.ced)} · ${x.nc} crédito(s) · saldo ${m$(x.sc)} · vencido ${m$(x.cv)}</div></div>`).join('')}</div>`
+  $('rgCliRes').innerHTML=r.length?`<div class="xs mut" style="margin:6px 0 2px">${q?r.length+' coincidencia(s)':'Tus '+cl.length+' clientes · toca uno o escribe para filtrar'}</div><div class="cli-res">${r.slice(0,60).map(x=>`<div onclick="elegirCli('${String(x.cod??'').replace(/[^\w.-]/g,'')}')"><b>${esc(x.nom)}</b><div style="margin:3px 0">${calInfo(x)}</div><div class="xs mut">${esc(x.ced)} · ${x.nc} crédito(s) · saldo ${m$(x.sc)} · vencido ${m$(x.cv)}</div></div>`).join('')}</div>`
     :'<div class="xs mut" style="margin-top:6px">⚠️ Ese cliente no está en tu cartera (puede ser de otro cobrador). Puedes guardar sin cliente y anotarlo en la nota.</div>';}
 function elegirCli(cod){const x=((S.listado[S.cob]?.cl)||[]).find(y=>y.cod===cod);if(!x)return;
   const creds=x.creds||[];
