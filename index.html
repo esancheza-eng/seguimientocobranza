@@ -763,6 +763,7 @@ async function cargarSup(){
   S.refis={};rf.forEach(d=>S.refis[d.id]=d.items||[]);
   S.mora=mo.sort((a,b)=>a.id.localeCompare(b.id));
   S.estado=es||{};S.equipo={};eq.forEach(d=>S.equipo[d.id]=d);
+  try{TCRED=await DB.get('config/tiendascred');}catch(e){TCRED=null;}
 }
 async function cargarCob(){
   const id=S.cob;
@@ -1110,8 +1111,13 @@ function renderRegs(){
       <td class="num b">${m$(r.monto)}</td><td><button class="btn ghost sm" onclick="borrarReg('${r.id}')">🗑</button></td></tr>`).join(''):'<tr><td colspan="9" class="center mut" style="padding:28px">Sin registros</td></tr>')+'</tbody>';
 }
 /* ---- correos a jefes de tienda (retiros pendientes de baja) ---- */
-let CORREOS=null,_corGrupos=[];
-function tiendaDeCred(cob,cc,t){if(t)return t;const l=S.listado[cob];const c=l&&(l.cl||[]).flatMap(x=>x.creds||[]).find(k=>k.cc===cc);return (c&&c.t)||'SIN TIENDA';}
+let CORREOS=null,_corGrupos=[],TCRED=null;
+function tiendaDeCred(cob,cc,t){if(t)return t;const l=S.listado[cob];const c=l&&(l.cl||[]).flatMap(x=>x.creds||[]).find(k=>k.cc===cc);if(c&&c.t)return c.t;
+  const i=TCRED&&TCRED.m?TCRED.m[cc]:undefined;return (i!=null&&TCRED.n[i])||'SIN TIENDA';}
+/* guarda (sin borrar) la tienda factura de cada crédito del archivo: sirve para retiros de clientes que ya salieron del listado */
+async function guardarTiendasCred(rows){const d=(await DB.get('config/tiendascred'))||{};const n=d.n||[],m=d.m||{};let nuevos=0;
+  (rows||[]).forEach(r=>{const cc=String(r['Cod Credito']??'').trim(),t=String(r['Tienda Factura']||'').trim();if(!cc||!t)return;let i=n.indexOf(t);if(i<0){n.push(t);i=n.length-1;}if(m[cc]!==i){if(m[cc]==null)nuevos++;m[cc]=i;}});
+  await DB.set('config/tiendascred',{n,m,ts:Date.now()});TCRED={n,m};return nuevos;}
 function gruposPendientes(){const g={};
   S.regs.filter(r=>r.tipo==='retiro'&&r.baja!=='SI').sort((a,b)=>(a.dia||'').localeCompare(b.dia||'')).forEach(r=>{
     const cr=(r.cliente?.creditos||[]);const lista=cr.length?cr:[{cc:'—',s:r.monto,t:''}];
@@ -1182,7 +1188,7 @@ function pintarFiltrosLs(nombre){const g=(k,t,lbl)=>{const vals=LS_F[k];const by
   $('lsFiltros').innerHTML=`<div class="okbox">📄 ${esc(nombre)} · ${fmt(LS_RAW.length,0)} filas de crédito</div>`+
     `<details style="margin-top:8px"><summary class="sm b" style="cursor:pointer;color:var(--navy)">⚙️ Filtros (por defecto: 2026 de mayo a ${MESES[new Date().getMonth()]}, A–E1, Origen: solo Refinanciamiento trx-393 y Facturación trx-142)</summary>`+
     g('fvi','📅 Fecha Vencimiento Inicial',ymLbl)+g('fvf','📅 Fecha Vencimiento Final',ymLbl)+g('cal','🏷️ Calificación Cliente Mensual')+g('ori','🧾 Origen Factura')+`</details>`+
-    `<div class="fld" style="margin-top:10px"><label>Fecha de la foto</label><input type="date" id="lsFecha" class="inp" value="${hoyYMD()}" max="${hoyYMD()}"></div><label class="sm" style="display:flex;gap:6px;align-items:center;margin-top:10px"><input type="checkbox" id="lsTambienRefi" checked> Tomar también los refinanciamientos de este archivo (todas las fechas)</label>`;
+    `<div class="fld" style="margin-top:10px"><label>Fecha de la foto</label><input type="date" id="lsFecha" class="inp" value="${hoyYMD()}" max="${hoyYMD()}"></div><label class="sm" style="display:flex;gap:6px;align-items:center;margin-top:10px"><input type="checkbox" id="lsTambienRefi" checked> Tomar también los refinanciamientos de este archivo (todas las fechas)</label><label class="sm" style="display:flex;gap:6px;align-items:center;margin-top:8px"><input type="checkbox" id="lsSoloTiendas"> <span><b>Solo guardar las tiendas factura</b> (para un listado anterior: no cambia la cartera, la foto ni los refinanciamientos)</span></label>`;
   $('lsFiltros').classList.remove('hidden');}
 function lsTog(k,el,v){const s=LS_F.sel[k];s.has(v)?s.delete(v):s.add(v);el.classList.toggle('on');procesarListado();}
 function lsAll(k){const s=LS_F.sel[k];if(s.size===LS_F[k].length)s.clear();else LS_F[k].forEach(v=>s.add(v));pintarFiltrosLs(document.querySelector('#lsFiltros .okbox')?.textContent.replace('📄 ','').split(' · ')[0]||'');procesarListado();}
@@ -1220,6 +1226,7 @@ function procesarListado(){
     (presentes.length<COBS.length?`<br>ℹ️ El archivo trae solo ${presentes.length} cobrador(es): <b>${presentes.map(i=>COB_BY_ID[i].corto).join(', ')}</b>. Solo se actualizará su listado; los demás <b>se mantienen como están</b>.`:(faltan.size?`<br>⚠️ Sin filas después de filtros: ${[...faltan].map(i=>COB_BY_ID[i].corto).join(', ')}`:''))+`</div><button class="btn gold block" style="margin-top:10px" onclick="publicarListado(this)">🚀 Publicar listado en línea</button>`;
 }
 async function publicarListado(b){if(!LS_OUT)return;if(b)b.disabled=true;
+  if($('lsSoloTiendas')?.checked){try{if(b)b.innerHTML='⏳ Guardando tiendas…';const nv=await guardarTiendasCred(LS_RAW);if(b)b.innerHTML='✅ Tiendas guardadas';toast(`✅ Tiendas factura guardadas (${nv} créditos nuevos)`);$('lsRes').innerHTML+=`<div class="okbox">✅ Se guardaron las tiendas factura de este archivo (${nv} créditos nuevos). La cartera publicada no cambió.</div>`;}catch(e){console.error(e);toast('No se pudo guardar: '+e.message);if(b){b.disabled=false;b.innerHTML='🚀 Publicar listado en línea';}}return;}
   const tot0=LS_OUT.presentes.length*2+2;let hechos=0;const avance=t=>{if(b)b.innerHTML=`⏳ ${t} (${Math.min(99,Math.round(hechos/tot0*100))}%)`;};const paso=()=>{hechos++;avance('Publicando…');};avance('Publicando…');
   try{const ts=Date.now();
     const P=COBS.filter(c=>LS_OUT.presentes.includes(c.id));
@@ -1235,6 +1242,7 @@ async function publicarListado(b){if(!LS_OUT)return;if(b)b.disabled=true;
     let extra='';
     avance('Guardando refinanciamientos…');
     if($('lsTambienRefi')?.checked){const r=extraerRefis(LS_RAW);await guardarRefis(r,ts,fecha);est.refis={ts,n:r.n};extra=` y ${r.n} refinanciamientos`;}
+    try{await guardarTiendasCred(LS_RAW);}catch(e){console.error(e);}
     await DB.set('config/estado',est,true);Object.assign(S.estado,est);
     hechos=tot0;if(b)b.innerHTML='✅ Publicado';
     toast(`✅ Listado publicado${extra}`);$('lsRes').innerHTML+=`<div class="okbox">✅ Publicado ${new Date(ts).toLocaleString('es-EC')}. Se actualizó: ${P.map(c=>c.corto).join(', ')}.</div>`;renderEstado();
