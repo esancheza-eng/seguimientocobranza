@@ -261,7 +261,7 @@ canvas{max-width:100%}
     <div class="ch"><div><h3>Tablero del equipo</h3><div class="sub" id="rkSub"></div></div>
       <button class="btn ghost sm" onclick="exportRanking()">⬇ Excel</button></div>
     <div class="tw"><table id="tbRank"></table></div>
-    <div class="sm mut" style="margin-top:8px"><span class="dot ok"></span> al ritmo o por encima &nbsp; <span class="dot warn"></span> 80–99 % del ritmo &nbsp; <span class="dot bad"></span> menos del 80 % &nbsp;·&nbsp; El ritmo es la parte de la meta que corresponde a los días transcurridos del mes.</div>
+    <div class="sm mut" style="margin-top:8px"><span class="dot ok"></span> al ritmo o por encima &nbsp; <span class="dot warn"></span> 80–99 % del ritmo &nbsp; <span class="dot bad"></span> menos del 80 % &nbsp;·&nbsp; Estado según % Contiene total frente a su meta: el ritmo es la parte de la meta que corresponde a los días laborales transcurridos del mes.</div>
   </div>
 </section>
 
@@ -828,9 +828,12 @@ function renderResumen(){
     const glob=(pr+pf)/2;
     let pl=null,pct=null;if(mt&&mt.si){pl=(mt.sl+mt.sr)/mt.si;pct=pl+mt.sc/mt.si;}
     return {c,m,a,pr,pf,ps,rfn:rr.length,rfm,psr,psf,glob,pl,pct};});
-  rows.sort((x,y)=>y.glob-x.glob);
+  const labTot=dm-libresDe(mes).length,ritMora=labTot>0?Math.max(0,labTot-diasLabRest(mes))/labTot:0;
+  $('rkSub').textContent=`${mesNombre(mes)} · día ${dt} de ${dm} · ritmo retiros y refi ${pctTxt(ritmo,0)} · ritmo Contiene total ${pctTxt(ritMora,0)} (${labTot-diasLabRest(mes)} de ${labTot} días laborales) · semana ${semIdx(hoyYMD())+1}`;
+  rows.forEach(r=>{r.cp=(r.pct!=null&&r.m.mc)?r.pct/r.m.mc:null;});
+  rows.sort((x,y)=>(y.pct??-1)-(x.pct??-1));
   const th=`<thead><tr><th>#</th><th>Cobrador</th><th class="num">Retiros</th><th class="num">Meta</th><th class="num">%</th><th class="num">Refinanc. a la fecha</th><th class="num">Cant.</th><th class="num">Meta</th><th class="num">%</th><th class="num">Semana ${sw+1} ret / refi</th><th class="num">Hoy</th><th class="num">Cobro efectivo</th><th class="num">% Libera</th><th class="num">% Cont. total</th><th>Estado</th></tr></thead>`;
-  const tb=rows.map((r,i)=>{const sem=semaforo(r.glob,ritmo);const hoy=r.a.retHoy+r.a.refiHoy;
+  const tb=rows.map((r,i)=>{const sem=r.cp==null?'off':semaforo(r.cp,ritMora);const hoy=r.a.retHoy+r.a.refiHoy;
     return `<tr><td>${i+1}</td><td class="cobn nowrap">${esc(r.c.corto)}</td>
     <td class="num">${m$(r.a.ret)}</td><td class="num mut">${m0(r.m.rm)}</td><td class="num"><span class="pc ${pcCls(r.pr,ritmo)}">${pctTxt(r.pr,0)}</span></td>
     <td class="num">${m$(r.a.refi)}</td><td class="num">${r.rfn}</td><td class="num mut">${m0(r.m.fm)}</td><td class="num"><span class="pc ${pcCls(r.pf,ritmo)}">${pctTxt(r.pf,0)}</span></td>
