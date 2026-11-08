@@ -125,6 +125,7 @@ tfoot td{background:#f4f7fc;font-weight:700;position:sticky;bottom:0}
 .t-retiro{background:#dbeafe;color:#1e40af}.t-refi{background:#fef3c7;color:#92400e}
 .dot{display:inline-block;width:10px;height:10px;border-radius:50%;vertical-align:-1px}
 .dot.ok{background:var(--ok)}.dot.warn{background:var(--warn)}.dot.bad{background:var(--bad)}.dot.off{background:#cbd5e1}
+.baja-sel{font:inherit;font-size:13px;font-weight:700;padding:5px 8px;border-radius:8px;border:1px solid;cursor:pointer}.baja-sel.baja-SI{background:#dcfce7;color:#166534;border-color:#86efac}.baja-sel.baja-PENDIENTE{background:#fef3c7;color:#92400e;border-color:#fcd34d}
 .pc{font-weight:700}.pc.ok{color:var(--ok)}.pc.warn{color:#b07d00}.pc.bad{color:var(--bad)}
 .cobn{font-weight:600;color:var(--navy)}
 .wa-i{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;background:#e7f9ee;color:#128c4a;text-decoration:none;font-size:14px}
@@ -1102,13 +1103,18 @@ function renderRegs(){
   const arr=S.regs.filter(r=>(!cob||r.cob===cob)&&(!tipo||r.tipo===tipo)&&(!dia||r.dia===dia)).sort((a,b)=>tsMs(b.ts)-tsMs(a.ts));window._rgArr=arr;
   const sr=arr.filter(r=>r.tipo==='retiro').reduce((s,r)=>s+r.monto,0),sf=arr.filter(r=>r.tipo==='refi').reduce((s,r)=>s+r.monto,0);
   $('rgSum').innerHTML=`<div class="s">Registros<b>${arr.length}</b></div><div class="s">Retiros<b>${m$(sr)}</b></div><div class="s">Refinanciamiento<b>${m$(sf)}</b></div>`;
-  $('tbRegs').innerHTML='<thead><tr><th>Fecha</th><th>Hora registro</th><th>Cobrador</th><th>Tipo</th><th>Cliente</th><th>Nota</th><th class="num">Monto</th><th></th></tr></thead><tbody>'+
+  $('tbRegs').innerHTML='<thead><tr><th>Fecha</th><th>Hora registro</th><th>Cobrador</th><th>Tipo</th><th>Cliente</th><th>Nota</th><th>Dado de baja</th><th class="num">Monto</th><th></th></tr></thead><tbody>'+
     (arr.length?arr.map(r=>`<tr><td class="nowrap">${dmy(r.dia)}</td><td class="sm mut nowrap">${r.ts?new Date(tsMs(r.ts)).toLocaleString('es-EC'):'enviando…'}</td><td class="cobn nowrap">${esc(COB_BY_ID[r.cob]?.corto||r.cob)}</td>
       <td><span class="badge ${r.tipo==='refi'?'t-refi':'t-retiro'}">${r.tipo==='refi'?'Refinanciamiento':'Retiro'}</span></td><td>${esc(r.cliente?.nom||'—')}<div class="xs mut">${esc(r.cliente?.ced||'')}</div>${r.cliente?.cm?`<div style="margin-top:2px">${calBadge(r.cliente.cm)} → ${calBadge(r.cliente.cr)} ${rodBadge(r.cliente.rod)}</div>`:''}${(r.cliente?.creditos||[]).length?`<div class="xs">${r.cliente.creditos.map(c=>`Créd. ${esc(c.cc)}: ${m$(c.s)}`).join(' · ')}</div>`:''}</td><td class="sm">${esc(r.nota||'')}</td>
-      <td class="num b">${m$(r.monto)}</td><td><button class="btn ghost sm" onclick="borrarReg('${r.id}')">🗑</button></td></tr>`).join(''):'<tr><td colspan="8" class="center mut" style="padding:28px">Sin registros</td></tr>')+'</tbody>';
+      <td>${(()=>{const v=r.baja==='SI'?'SI':'PENDIENTE';return `<select class="baja-sel baja-${v}" onchange="setBaja('${r.id}',this)"><option value="PENDIENTE"${v==='PENDIENTE'?' selected':''}>PENDIENTE</option><option value="SI"${v==='SI'?' selected':''}>SI</option></select>`;})()}</td>
+      <td class="num b">${m$(r.monto)}</td><td><button class="btn ghost sm" onclick="borrarReg('${r.id}')">🗑</button></td></tr>`).join(''):'<tr><td colspan="9" class="center mut" style="padding:28px">Sin registros</td></tr>')+'</tbody>';
 }
+async function setBaja(id,el){const v=el.value==='SI'?'SI':'PENDIENTE';el.className='baja-sel baja-'+v;el.disabled=true;
+  try{await DB.set('registros/'+id,{baja:v,bajaTs:Date.now()},true);const r=S.regs.find(x=>x.id===id);if(r)r.baja=v;toast(v==='SI'?'✅ Marcado como dado de baja':'Marcado como pendiente');}
+  catch(e){console.error(e);toast('No se pudo guardar: '+(e.code||e.message));const r=S.regs.find(x=>x.id===id);const o=r&&r.baja==='SI'?'SI':'PENDIENTE';el.value=o;el.className='baja-sel baja-'+o;}
+  el.disabled=false;}
 async function borrarReg(id){if(!confirm('¿Borrar este registro?'))return;try{await DB.del('registros/'+id);toast('Registro borrado');}catch(e){toast('No se pudo borrar (solo durante 24 h)');}}
-function exportRegs(){xlsxDownload((window._rgArr||[]).map(r=>({Fecha:dmy(r.dia),'Hora registro':r.ts?new Date(tsMs(r.ts)).toLocaleString('es-EC'):'',Cobrador:COB_BY_ID[r.cob]?.corto||r.cob,Tipo:r.tipo==='refi'?'Refinanciamiento':'Retiro',Cliente:r.cliente?.nom||'','Cédula':r.cliente?.ced||'','Cal. mensual':r.cliente?.cm||'','Cal. rodamiento':r.cliente?.cr||'','Categoría rodamiento':r.cliente?.rod||'','Créditos':(r.cliente?.creditos||[]).map(c=>c.cc+' ($'+c.s+')').join(', '),Nota:r.nota||'',Monto:r.monto})),`Registros_${S.mes}.xlsx`,'Registros');}
+function exportRegs(){xlsxDownload((window._rgArr||[]).map(r=>({Fecha:dmy(r.dia),'Hora registro':r.ts?new Date(tsMs(r.ts)).toLocaleString('es-EC'):'',Cobrador:COB_BY_ID[r.cob]?.corto||r.cob,Tipo:r.tipo==='refi'?'Refinanciamiento':'Retiro',Cliente:r.cliente?.nom||'','Cédula':r.cliente?.ced||'','Cal. mensual':r.cliente?.cm||'','Cal. rodamiento':r.cliente?.cr||'','Categoría rodamiento':r.cliente?.rod||'','Créditos':(r.cliente?.creditos||[]).map(c=>c.cc+' ($'+c.s+')').join(', '),Nota:r.nota||'','Dado de baja':r.baja==='SI'?'SI':'PENDIENTE',Monto:r.monto})),`Registros_${S.mes}.xlsx`,'Registros');}
 
 /* =====================================================================
    CARGA DE ARCHIVOS
