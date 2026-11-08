@@ -125,6 +125,11 @@ tfoot td{background:#f4f7fc;font-weight:700;position:sticky;bottom:0}
 .t-retiro{background:#dbeafe;color:#1e40af}.t-refi{background:#fef3c7;color:#92400e}
 .dot{display:inline-block;width:10px;height:10px;border-radius:50%;vertical-align:-1px}
 .dot.ok{background:var(--ok)}.dot.warn{background:var(--warn)}.dot.bad{background:var(--bad)}.dot.off{background:#cbd5e1}
+.es-h{background:linear-gradient(135deg,#0a1f44,#1e3a8a);color:#fff;border-radius:16px;padding:18px 18px 16px;margin-bottom:12px}.es-h h2{margin:0;font-size:20px;line-height:1.25}.es-h .k{color:#e8a317;font-size:11px;font-weight:800;letter-spacing:1px}.es-h p{color:#dbe4f5;font-size:13.5px;margin:8px 0 0;line-height:1.45}
+.es-c{background:#fff;border:1px solid #e4e9f2;border-left:5px solid var(--ac,#e8a317);border-radius:14px;padding:14px 16px;margin-bottom:12px;box-shadow:0 2px 8px rgba(10,31,68,.06)}.es-c h3{margin:0 0 8px;font-size:16px;color:#0a1f44}.es-c p{margin:6px 0;font-size:14px;line-height:1.45;color:#334155}
+.es-r{display:flex;gap:8px;padding:7px 0;border-bottom:1px dashed #e4e9f2;font-size:14px;line-height:1.4}.es-r:last-child{border-bottom:0}.es-r b{color:#0a1f44;min-width:118px}.es-r .v{color:#334155}
+.es-chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}.es-chip{background:#fff7e0;color:#7a5200;border:1px solid #f5d68a;border-radius:999px;padding:4px 10px;font-size:12.5px;font-weight:700}
+.es-d{display:flex;gap:12px;align-items:center;padding:9px 10px;border-radius:12px;background:#f5f8ff;margin:6px 0}.es-d .f{min-width:62px;text-align:center;background:#0a1f44;color:#fff;border-radius:10px;padding:6px 4px;line-height:1.1}.es-d .f b{display:block;font-size:20px}.es-d .f span{font-size:10px;text-transform:uppercase;color:#e8a317;font-weight:800}.es-d .t{font-size:13.5px;color:#334155;line-height:1.4}.es-d .cd{display:inline-block;margin-top:4px;font-size:11.5px;font-weight:800;border-radius:999px;padding:2px 9px}
 .baja-sel{font:inherit;font-size:13px;font-weight:700;padding:5px 8px;border-radius:8px;border:1px solid;cursor:pointer}.baja-sel.baja-OTRO{background:#e0e9ff;color:#1e3a8a;border-color:#93b4fd}.baja-sel.baja-SI{background:#dcfce7;color:#166534;border-color:#86efac}.baja-sel.baja-PENDIENTE{background:#fef3c7;color:#92400e;border-color:#fcd34d}
 .pc{font-weight:700}.pc.ok{color:var(--ok)}.pc.warn{color:#b07d00}.pc.bad{color:var(--bad)}
 .cobn{font-weight:600;color:var(--navy)}
@@ -432,6 +437,18 @@ canvas{max-width:100%}
   <div class="card" style="margin-top:14px"><h3>Última actualización</h3><div id="estadoCargas" class="sm"></div></div>
 </section>
 
+<section class="sec" id="s-estrat">
+  <div class="grid g2">
+    <div class="card"><div class="ch"><div><h3>🎯 Estrategias de cobranza</h3><div class="sub">Lo que escribas aquí lo ven los 14 cobradores en su pestaña 🎯 Estrategias</div></div></div>
+      <textarea id="esTxt" class="inp" style="width:100%;min-height:440px;font-family:ui-monospace,Consolas,monospace;font-size:13px;line-height:1.45" oninput="esPrev()"></textarea>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn gold" onclick="guardarEstrat(this)">💾 Guardar y publicar</button><button class="btn ghost sm" onclick="if(confirm('¿Reemplazar el texto por la plantilla de noviembre 2026?')){$('esTxt').value=ESTRAT_BASE;esPrev();}">↺ Plantilla noviembre</button></div>
+      <div class="xs mut" id="esInfo" style="margin-top:6px"></div>
+      <div class="info" style="margin-top:10px;font-size:12.5px;line-height:1.55"><b>Cómo escribir:</b><br><code>## Título</code> título principal · <code># Título</code> nueva tarjeta · <code>- Clave: valor</code> dato con la clave en negrita<br><code>+ uno, dos, tres</code> etiquetas · <code>! 2026-11-25 | texto</code> fecha clave con cuenta regresiva · cualquier otra línea es un párrafo</div>
+    </div>
+    <div class="card"><h3>Vista previa (así lo ve el cobrador)</h3><div id="esPrev" style="margin-top:8px;max-width:480px"></div></div>
+  </div>
+</section>
+
 <section class="sec" id="s-equipo">
   <div class="card">
     <div class="ch"><div><h3>Accesos del equipo</h3><div class="sub">Crea el acceso de cada cobrador y envíale su PIN por WhatsApp. Si lo pierde, genera uno nuevo y el anterior deja de funcionar.</div></div>
@@ -475,6 +492,8 @@ canvas{max-width:100%}
     <div class="pager" id="cPager"></div>
   </div>
 </section>
+
+<section class="sec" id="c-estrat"><div id="cEstrat" style="max-width:640px;margin:0 auto"></div></section>
 
 <section class="sec" id="c-mora">
   <div class="grid g3" id="cMoKpis"></div>
@@ -716,14 +735,14 @@ function boot(){
 /* =====================================================================
    NAVEGACIÓN
    ===================================================================== */
-const TABS_SUP=[['s-resumen','📊 Resumen'],['s-metas','🎯 Metas y semanas'],['s-refis','🔁 Refinanciamientos'],['s-mora','📈 Mora proyectada'],['s-cobro','💵 Cobro efectivo'],['s-gest','📝 Gestiones'],['s-listado','📋 Listado'],['s-registros','🧾 Registros'],['s-cargar','⬆️ Cargar datos'],['s-equipo','👥 Equipo']];
-const TABS_COB=[['c-inicio','🏠 Mi avance'],['c-registrar','➕ Registrar'],['c-cartera','📋 Mi cartera'],['c-mora','📈 Mi mora']];
+const TABS_SUP=[['s-resumen','📊 Resumen'],['s-metas','🎯 Metas y semanas'],['s-refis','🔁 Refinanciamientos'],['s-mora','📈 Mora proyectada'],['s-cobro','💵 Cobro efectivo'],['s-gest','📝 Gestiones'],['s-listado','📋 Listado'],['s-registros','🧾 Registros'],['s-cargar','⬆️ Cargar datos'],['s-equipo','👥 Equipo'],['s-estrat','🎯 Estrategias']];
+const TABS_COB=[['c-inicio','🏠 Mi avance'],['c-registrar','➕ Registrar'],['c-cartera','📋 Mi cartera'],['c-mora','📈 Mi mora'],['c-estrat','🎯 Estrategias']];
 let tabActual='';
 function goTab(id){tabActual=id;document.querySelectorAll('.sec').forEach(s=>s.classList.toggle('on',s.id===id));
   document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===id));window.scrollTo({top:0});renderTab(id);}
 function renderTab(id){
-  const f={'s-resumen':renderResumen,'s-metas':renderMetas,'s-refis':renderRefis,'s-mora':renderMora,'s-cobro':renderCobro,'s-gest':renderGest,'s-listado':renderListado,'s-registros':renderRegs,'s-cargar':renderEstado,'s-equipo':renderEquipo,
-    'c-inicio':renderCInicio,'c-registrar':()=>{},'c-cartera':renderCCartera,'c-mora':renderCMora}[id];
+  const f={'s-resumen':renderResumen,'s-metas':renderMetas,'s-refis':renderRefis,'s-mora':renderMora,'s-cobro':renderCobro,'s-gest':renderGest,'s-listado':renderListado,'s-registros':renderRegs,'s-cargar':renderEstado,'s-equipo':renderEquipo,'s-estrat':renderSEstrat,
+    'c-inicio':renderCInicio,'c-registrar':()=>{},'c-cartera':renderCCartera,'c-mora':renderCMora,'c-estrat':renderCEstrat}[id];
   try{f&&f();}catch(e){console.error(e);}
 }
 async function iniciar(ses){
@@ -764,11 +783,13 @@ async function cargarSup(){
   S.mora=mo.sort((a,b)=>a.id.localeCompare(b.id));
   S.estado=es||{};S.equipo={};eq.forEach(d=>S.equipo[d.id]=d);
   try{TCRED=await DB.get('config/tiendascred');}catch(e){TCRED=null;}
+  try{S.estrat=await DB.get('estrategias/actual');}catch(e){S.estrat=null;}
 }
 async function cargarCob(){
   const id=S.cob;
   S.unsub.push(DB.listen('metas',[],docs=>{const d=docs.find(x=>x.id===S.mes);S.metas=d?d.cobs:null;S.libresMes=d&&d.libres?d.libres:null;if(tabActual==='c-inicio')renderCInicio();}));
   S.unsub.push(DB.listen('registros',[['cob','==',id],['mes','==',S.mes]],docs=>{S.regs=docs;if(tabActual==='c-inicio')renderCInicio();}));
+  S.unsub.push(DB.listen('estrategias',[],docs=>{S.estrat=docs.find(d=>d.id==='actual')||null;if(tabActual==='c-estrat')renderCEstrat();}));
   const [ls,rf,mo,ce]=await Promise.all([DB.get('listado/'+id),DB.get('refis/'+id),DB.get('moracob/'+id),DB.get('cobrocob/'+id)]).catch(e=>{console.error(e);return [null,null,null,null];});
   S.cobroCob=ce&&ce.dias?ce.dias:{};
   S.listado={};if(ls)S.listado[id]=ls;
@@ -1110,6 +1131,59 @@ function renderRegs(){
       <td>${(()=>{const v=estBaja(r);return `<select class="baja-sel baja-${v}" onchange="setBaja('${r.id}',this)"><option value="PENDIENTE"${v==='PENDIENTE'?' selected':''}>PENDIENTE</option><option value="SI"${v==='SI'?' selected':''}>SI</option><option value="OTRO"${v==='OTRO'?' selected':''}>OTRO</option></select>${v==='OTRO'&&r.bajaObs?`<div class="xs" style="margin-top:4px;color:#1e3a8a;max-width:200px">📝 ${esc(r.bajaObs)} <a href="#" onclick="event.preventDefault();editarObs('${r.id}')">editar</a></div>`:''}`;})()}</td>
       <td class="num b">${m$(r.monto)}</td><td><button class="btn ghost sm" onclick="borrarReg('${r.id}')">🗑</button></td></tr>`).join(''):'<tr><td colspan="10" class="center mut" style="padding:28px">Sin registros</td></tr>')+'</tbody>';
 }
+/* ---- estrategias de cobranza (editable por el supervisor, la ven los cobradores) ---- */
+const ESTRAT_BASE=`## Estrategias de Cobranza · Noviembre 2026
+Clientes de los tramos A-B-C-D-E-E1 que están afectando el riesgo e incrementando la probabilidad de provisión dentro de las tiendas, debido a que han venido deteriorando su historial de pagos. A continuación, el detalle del proceso:
+
+# 📅 Fechas clave
+! 2026-11-20 | Último día para que las tiendas ingresen las notas de crédito pendientes.
+! 2026-11-25 | Cierre de la campaña: generación de notas de crédito e ingreso de retiros. Las notas rezagadas las ingresa Cartera CAT para su regularización.
+- Lineamiento: las notas de crédito se generan en un plazo máximo de 72 horas.
+
+# 🔁 Campaña Refinanciamientos
+- Tramos: A-B-C-D-E-E1
+- Filtro: Cartera Marcimex
+- Políticas: Con / Sin intereses
+- Saldo de crédito: Mayor a $300
+- Abonos: Presentar abonos de los 2 últimos meses
+- Crédito: Cancelado mínimo el 50 %
+
+# 📦 Campaña Retiros
+- Tramos: A-B-C-D-E-E1
+- Filtro: Sin filtro Entidad Cartera
+- Vencimientos: Cuotas 1-2-3
+- Fecha factura: Máximo último año
+Categorías:
++ Motos, Cocción, Lavado, Secado, Refrigeración, Video, Scooters, Gaming, Celulares gama alta / premium, Cómputo gama media / alta
+
+# 📌 Notas de crédito por retiro rezagadas
+Todas las notas de crédito pendientes que no hayan sido ingresadas por las tiendas hasta el 20 de noviembre serán ingresadas por Cartera CAT para su regularización el día 25 de noviembre.`;
+function estratHTML(txt){const MES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];const AC=['#e8a317','#2563eb','#16a34a','#dc2626','#7c3aed','#0891b2'];
+  const lines=String(txt||'').replace(/\r/g,'').split('\n');let head='',intro=[],cards=[],cur=null;
+  const hoy=new Date(hoyYMD()+'T00:00:00');
+  for(const raw of lines){const l=raw.trim();
+    if(l.startsWith('## ')){head=l.slice(3);continue;}
+    if(l.startsWith('# ')){cur={t:l.slice(2),b:[]};cards.push(cur);continue;}
+    if(!l){continue;}
+    let h='';
+    if(l.startsWith('- ')){const x=l.slice(2);const i=x.indexOf(':');h=i>0&&i<40?`<div class="es-r"><b>${esc(x.slice(0,i))}</b><span class="v">${esc(x.slice(i+1).trim())}</span></div>`:`<div class="es-r"><span class="v">• ${esc(x)}</span></div>`;}
+    else if(l.startsWith('+ ')){h=`<div class="es-chips">${l.slice(2).split(',').map(t=>t.trim()).filter(Boolean).map(t=>`<span class="es-chip">${esc(t)}</span>`).join('')}</div>`;}
+    else if(l.startsWith('! ')){const m=l.slice(2).match(/^(\d{4})-(\d{2})-(\d{2})\s*\|?\s*(.*)$/);
+      if(m){const d=new Date(`${m[1]}-${m[2]}-${m[3]}T00:00:00`);const n=Math.round((d-hoy)/864e5);
+        const cd=n>1?[`Faltan ${n} días`,'#dbe7ff','#1e3a8a']:n===1?['Mañana','#fef3c7','#92400e']:n===0?['¡Es hoy!','#fee2e2','#991b1b']:['Fecha cumplida','#e5e7eb','#475569'];
+        h=`<div class="es-d"><div class="f"><b>${+m[3]}</b><span>${MES[+m[2]-1]}</span></div><div class="t">${esc(m[4])}<br><span class="cd" style="background:${cd[1]};color:${cd[2]}">${cd[0]}</span></div></div>`;}
+      else h=`<p>${esc(l.slice(2))}</p>`;}
+    else h=`<p>${esc(l)}</p>`;
+    if(cur)cur.b.push(h);else intro.push(h);}
+  return `<div class="es-h"><div class="k">CARTERA ZONA MILAGRO</div><h2>${esc(head||'Estrategias de cobranza')}</h2>${intro.join('').replace(/<p>/g,'<p>')}</div>`+
+    cards.map((c,i)=>`<div class="es-c" style="--ac:${AC[i%AC.length]}"><h3>${esc(c.t)}</h3>${c.b.join('')}</div>`).join('');}
+function renderCEstrat(){const t=S.estrat&&S.estrat.texto!=null?S.estrat.texto:ESTRAT_BASE;$('cEstrat').innerHTML=estratHTML(t)+(S.estrat&&S.estrat.ts?`<div class="xs mut center" style="margin:6px 0 14px">Actualizado ${new Date(S.estrat.ts).toLocaleString('es-EC')}</div>`:'');}
+function renderSEstrat(){const ta=$('esTxt');if(!ta.dataset.cargado){ta.value=S.estrat&&S.estrat.texto!=null?S.estrat.texto:ESTRAT_BASE;ta.dataset.cargado='1';}
+  $('esInfo').textContent=S.estrat&&S.estrat.ts?`Última publicación: ${new Date(S.estrat.ts).toLocaleString('es-EC')}`:'Aún no publicado: los cobradores ven la plantilla de noviembre 2026.';esPrev();}
+function esPrev(){$('esPrev').innerHTML=estratHTML($('esTxt').value);}
+async function guardarEstrat(b){const texto=$('esTxt').value.slice(0,20000);b.disabled=true;
+  try{const d={texto,ts:Date.now()};await DB.set('estrategias/actual',d);S.estrat=d;toast('✅ Estrategia publicada para los cobradores');renderSEstrat();}
+  catch(e){console.error(e);toast('No se pudo guardar: '+(e.code||e.message));}b.disabled=false;}
 /* ---- correos a jefes de tienda (retiros pendientes de baja) ---- */
 let CORREOS=null,_corGrupos=[],TCRED=null;
 function tiendaDeCred(cob,cc,t){if(t)return t;const l=S.listado[cob];const c=l&&(l.cl||[]).flatMap(x=>x.creds||[]).find(k=>k.cc===cc);if(c&&c.t)return c.t;
@@ -1130,7 +1204,7 @@ function gruposPendientes(){return gruposRango('','').map(g=>({...g,items:g.item
 function corTotales(gs){return gs.reduce((t,g)=>{t.n+=g.items.length;t.tot+=g.tot;t.nb+=g.nb;t.tb+=g.tb;t.np+=g.np;t.tp+=g.tp;t.no+=g.no;t.to+=g.to;return t;},{n:0,tot:0,nb:0,tb:0,np:0,tp:0,no:0,to:0});}
 function negrita(t){return [...String(t)].map(ch=>{const c=ch.codePointAt(0);if(c>=65&&c<=90)return String.fromCodePoint(0x1D5D4+c-65);if(c>=97&&c<=122)return String.fromCodePoint(0x1D5EE+c-97);if(c>=48&&c<=57)return String.fromCodePoint(0x1D7EC+c-48);return ch;}).join('');}
 function correoTexto(gs){const T=corTotales(gs);const pl=(n,v)=>`${n} crédito${n!==1?'s':''} · ${m$(v)}`;const LN='==============================';
-  const L=['Estimados Jefes de Tienda:','',`Se detallan los retiros de mercadería realizados por el equipo de cobranzas de la Zona Milagro del ${dmy(_corDesde)} al ${dmy(_corHasta)}. Solicito aplicar la nota de crédito de los retiros que se encuentran PENDIENTES de dar de baja.`,'',
+  const L=['Estimados Jefes de Tienda:','',`Se detallan los retiros de mercadería realizados por el equipo de cobranzas de la Zona Milagro del ${dmy(_corDesde)} al ${dmy(_corHasta)}. Solicito aplicar la nota de crédito de los retiros que se encuentran PENDIENTES de dar de baja.`,'','📌 '+negrita('Lineamiento')+': las notas de crédito se generan en un plazo máximo de 72 horas.','',
     LN,'📊 '+negrita('RESUMEN'),LN,`Retiros realizados: ${pl(T.n,T.tot)}`,`✅ Dados de baja: ${pl(T.nb,T.tb)}`,`⏳ Pendientes de baja: ${pl(T.np,T.tp)}`];
   if(T.no)L.push(`📝 Otros (con observación): ${pl(T.no,T.to)}`);
   gs.forEach(g=>{L.push('',LN,`🏬 ${negrita(g.t)}`,`${pl(g.items.length,g.tot)} | ✅ ${g.nb} de baja | ⏳ ${g.np} pendiente${g.np!==1?'s':''}${g.no?` | 📝 ${g.no} otro${g.no!==1?'s':''}`:''}`,LN);
