@@ -411,25 +411,19 @@ canvas{max-width:100%}
       <div id="lsRes"></div>
     </div>
     <div class="card">
-      <h3>2 · Refinanciamientos</h3><div class="sub">Detalle por Clientes con todas las fechas de vencimiento. Primero se filtra <b>Fecha Crédito del mes en curso</b> (del 1 a hoy) y luego Origen Factura = <b>Por Refinanciamiento trx-393</b>; solo esos se guardan, con su Saldo Crédito Final, por cobrador. Se acumulan: lo ya guardado no se borra.</div>
-      <div class="drop" id="dpRf" onclick="pick('fRf')"><div class="big">🔁</div><b>Arrastra o toca para subir</b><div class="sm mut">Detalle_por_Clientes.xlsx</div></div>
-      <input type="file" id="fRf" accept=".xlsx,.xls,.csv" class="hidden" onchange="leerRefis(this.files[0])">
-      <div id="rfRes"></div>
-    </div>
-    <div class="card">
-      <h3>3 · Mora proyectada</h3><div class="sub">Mora_Proyectada_por_Cobrador. Cada carga se guarda como el corte del día para el seguimiento diario.</div>
+      <h3>2 · Mora proyectada</h3><div class="sub">Mora_Proyectada_por_Cobrador. Cada carga se guarda como el corte del día para el seguimiento diario.</div>
       <div class="drop" id="dpMo" onclick="pick('fMo')"><div class="big">📈</div><b>Arrastra o toca para subir</b><div class="sm mut">Mora_Proyectada_por_Cobrador.xlsx</div></div>
       <input type="file" id="fMo" accept=".xlsx,.xls,.csv" class="hidden" onchange="leerMora(this.files[0])">
       <div id="moRes"></div>
     </div>
     <div class="card">
-      <h3>4 · Cobro efectivo</h3><div class="sub">Cobro_Efectivo_por_Cobrador (acumulado del mes). Cada carga se guarda como el corte del día; de un corte al siguiente se calcula lo cobrado ese día.</div>
+      <h3>3 · Cobro efectivo</h3><div class="sub">Cobro_Efectivo_por_Cobrador (acumulado del mes). Cada carga se guarda como el corte del día; de un corte al siguiente se calcula lo cobrado ese día.</div>
       <div class="drop" id="dpCe" onclick="pick('fCe')"><div class="big">💵</div><b>Arrastra o toca para subir</b><div class="sm mut">Cobro_Efectivo_por_Cobrador.xlsx</div></div>
       <input type="file" id="fCe" accept=".xlsx,.xls,.csv" class="hidden" onchange="leerCobro(this.files[0])">
       <div id="ceRes"></div>
     </div>
     <div class="card">
-      <h3>5 · Gestiones</h3><div class="sub">gestiones_cobranza.csv. Se cuentan visitas por cliente (no por crédito). Se acumula en el mes sin duplicar.</div>
+      <h3>4 · Gestiones</h3><div class="sub">gestiones_cobranza.csv. Se cuentan visitas por cliente (no por crédito). Se acumula en el mes sin duplicar.</div>
       <div class="drop" id="dpGe" onclick="pick('fGe')"><div class="big">📝</div><b>Arrastra o toca para subir</b><div class="sm mut">gestiones_cobranza.csv</div></div>
       <input type="file" id="fGe" accept=".csv,.txt" class="hidden" onchange="leerGest(this.files[0])">
       <div id="geRes"></div>
@@ -905,7 +899,7 @@ function initSupControles(){
   ['rfCob','lsCob','rgCob'].forEach(i=>$(i).innerHTML=opts);
   $('moCobChart').innerHTML='<option value="">Zona Milagro (total)</option>'+COBS.map(c=>`<option value="${c.id}">${esc(c.corto)}</option>`).join('');
   $('lsCal').innerHTML='<option value="">Calificación: todas</option>'+CAL_ORDER.map(c=>`<option>${c}</option>`).join('');
-  ['dpLs','dpRf','dpMo','dpCe','dpGe'].forEach((id,i)=>{const el=$(id),fn=[leerListado,leerRefis,leerMora,leerCobro,leerGest][i];
+  ['dpLs','dpMo','dpCe','dpGe'].forEach((id,i)=>{const el=$(id),fn=[leerListado,leerMora,leerCobro,leerGest][i];
     el.addEventListener('dragover',e=>{e.preventDefault();el.classList.add('ov');});el.addEventListener('dragleave',()=>el.classList.remove('ov'));
     el.addEventListener('drop',e=>{e.preventDefault();el.classList.remove('ov');const f=e.dataTransfer.files[0];if(f)fn(f);});});
 }
@@ -1189,7 +1183,7 @@ function pintarFiltrosLs(nombre){const g=(k,t,lbl)=>{const vals=LS_F[k];const by
   $('lsFiltros').innerHTML=`<div class="okbox">📄 ${esc(nombre)} · ${fmt(LS_RAW.length,0)} filas de crédito</div>`+
     `<details style="margin-top:8px"><summary class="sm b" style="cursor:pointer;color:var(--navy)">⚙️ Filtros (por defecto: 2026 de mayo a ${MESES[new Date().getMonth()]}, A–E1, Origen: solo Refinanciamiento trx-393 y Facturación trx-142)</summary>`+
     g('fvi','📅 Fecha Vencimiento Inicial',ymLbl)+g('fvf','📅 Fecha Vencimiento Final',ymLbl)+g('cal','🏷️ Calificación Cliente Mensual')+g('ori','🧾 Origen Factura')+`</details>`+
-    `<div class="fld" style="margin-top:10px"><label>Fecha de la foto</label><input type="date" id="lsFecha" class="inp" value="${hoyYMD()}" max="${hoyYMD()}"></div><label class="sm" style="display:flex;gap:6px;align-items:center;margin-top:10px"><input type="checkbox" id="lsTambienRefi" checked> Tomar también los refinanciamientos de este archivo (todas las fechas)</label><label class="sm" style="display:flex;gap:6px;align-items:center;margin-top:8px"><input type="checkbox" id="lsSoloTiendas"> <span><b>Solo guardar las tiendas factura</b> (para un listado anterior: no cambia la cartera, la foto ni los refinanciamientos)</span></label>`;
+    `<div class="fld" style="margin-top:10px"><label>Fecha de la foto</label><input type="date" id="lsFecha" class="inp" value="${hoyYMD()}" max="${hoyYMD()}"></div><label class="sm" style="display:flex;gap:6px;align-items:center;margin-top:10px"><input type="checkbox" id="lsTambienRefi" checked> Tomar también los refinanciamientos de este archivo (todas las fechas)</label>`;
   $('lsFiltros').classList.remove('hidden');}
 function lsTog(k,el,v){const s=LS_F.sel[k];s.has(v)?s.delete(v):s.add(v);el.classList.toggle('on');procesarListado();}
 function lsAll(k){const s=LS_F.sel[k];if(s.size===LS_F[k].length)s.clear();else LS_F[k].forEach(v=>s.add(v));pintarFiltrosLs(document.querySelector('#lsFiltros .okbox')?.textContent.replace('📄 ','').split(' · ')[0]||'');procesarListado();}
@@ -1227,7 +1221,6 @@ function procesarListado(){
     (presentes.length<COBS.length?`<br>ℹ️ El archivo trae solo ${presentes.length} cobrador(es): <b>${presentes.map(i=>COB_BY_ID[i].corto).join(', ')}</b>. Solo se actualizará su listado; los demás <b>se mantienen como están</b>.`:(faltan.size?`<br>⚠️ Sin filas después de filtros: ${[...faltan].map(i=>COB_BY_ID[i].corto).join(', ')}`:''))+`</div><button class="btn gold block" style="margin-top:10px" onclick="publicarListado(this)">🚀 Publicar listado en línea</button>`;
 }
 async function publicarListado(b){if(!LS_OUT)return;if(b)b.disabled=true;
-  if($('lsSoloTiendas')?.checked){try{if(b)b.innerHTML='⏳ Guardando tiendas…';const nv=await guardarTiendasCred(credsListado());if(b)b.innerHTML='✅ Tiendas guardadas';toast(`✅ Tiendas factura guardadas (${nv} créditos nuevos)`);$('lsRes').innerHTML+=`<div class="okbox">✅ Se guardaron las tiendas factura de este archivo (${nv} créditos nuevos). La cartera publicada no cambió.</div>`;}catch(e){console.error(e);toast('No se pudo guardar: '+e.message);if(b){b.disabled=false;b.innerHTML='🚀 Publicar listado en línea';}}return;}
   const tot0=LS_OUT.presentes.length*2+2;let hechos=0;const avance=t=>{if(b)b.innerHTML=`⏳ ${t} (${Math.min(99,Math.round(hechos/tot0*100))}%)`;};const paso=()=>{hechos++;avance('Publicando…');};avance('Publicando…');
   try{const ts=Date.now();
     const P=COBS.filter(c=>LS_OUT.presentes.includes(c.id));
