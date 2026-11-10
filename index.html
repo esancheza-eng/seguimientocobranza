@@ -340,6 +340,7 @@ canvas{max-width:100%}
       <div class="chartbox"><canvas id="chMora"></canvas></div></div>
     <div class="card"><h3>Total por cobrador</h3><div class="sub">Variación en puntos frente al corte anterior</div><div class="tw" style="max-height:340px"><table id="tbMora"></table></div></div>
   </div>
+  <div class="card" id="sPulso" style="margin-top:14px"></div>
   <div class="card" style="margin-top:14px">
     <div class="ch"><div><h3>🎯 Metas de mora por cobrador</h3><div class="sub" id="mmSub"></div></div>
       <div class="chips"><span class="chip on" data-k="L" onclick="setMmTipo(this)">Libera</span><span class="chip" data-k="C" onclick="setMmTipo(this)">Contiene total</span></div></div>
@@ -505,6 +506,7 @@ canvas{max-width:100%}
 <section class="sec" id="c-inicio">
   <div id="cAlerta"></div>
   <div class="card" id="cMetaMora" style="margin-bottom:14px;border-left:5px solid var(--purple)"></div>
+  <div class="card" id="cPulso" style="margin-bottom:14px;border-left:5px solid #2563eb"></div>
   <div class="card" id="cCobro" style="margin-bottom:14px;border-left:5px solid var(--ok)"></div>
   <div class="card" id="cSistema" style="margin-bottom:14px;border-left:5px solid var(--gold)"></div>
   <div class="cob-hero" id="cHero"></div>
@@ -1076,6 +1078,7 @@ function renderMetaMora(){
     `</tbody><tfoot><tr><td>Zona</td><td class="num">${m0(T.si)}</td><td class="num">${m$(T.v)}</td><td class="num">${pctTxt(T.si?T.v/T.si:0,2)}</td><td></td><td class="num">${m0(T.m)}</td><td class="num">${m0(T.f)}</td><td class="num">${T.hasA?(T.a>=0?'+':'')+m$(T.a):'—'}</td><td class="num">${m$(T.h)}</td><td></td><td class="num">${(()=>{const zp=snap?proyectar(serieSup(null,mmTipo,snap.id),S.mes,L?0.31:0.66):null;return proyCell(zp);})()}</td><td class="nowrap sm">${(()=>{const zp=snap?proyectar(serieSup(null,mmTipo,snap.id),S.mes,1):null;return zp?TEND[zp.tend]:'';})()}</td></tr></tfoot>`;
 }
 function renderMora(){
+  try{renderPulsoSup();}catch(e){console.error(e);}
   const sel=$('moFecha'),prev=sel.value;
   sel.innerHTML=S.mora.length?[...S.mora].reverse().map(s=>`<option value="${s.id}">${dmy(s.id)}</option>`).join(''):'<option value="">Sin cortes</option>';
   if(prev&&S.mora.some(s=>s.id===prev))sel.value=prev;
@@ -1812,6 +1815,88 @@ function renderCMetaMora(){
   $('cMetaMora').innerHTML=`<h3>🎯 Mis metas de mora</h3><div class="sub">Mora proyectada · corte ${dmy(u)} · saldo inicial ${m$(r.si)}</div>
     <div class="b" style="margin-top:6px;color:var(--purple)">📅 Te quedan ${dl} días laborales</div>`+
     bloque('Libera','✅',r.pl,m.ml,r.lib,r.mL,r.falL,r.ayerL,r.hoyL,'ok',proyectar(serC('L'),S.mes,m.ml))+bloque('Contiene total','🛡️',r.pct,m.mc,r.ct,r.mC,r.falC,r.ayerC,r.hoyC,'',proyectar(serC('C'),S.mes,m.mc))+'';}
+/* =====================================================================
+   PULSO DIARIO DE RECUPERACIÓN (Libera / Contiene total)
+   ===================================================================== */
+let PUL_T_COB='L',PUL_T_SUP='L';
+function labDesde(mes,day){const lib=libresDe(mes),n=diasMes(mes);let c=0;for(let d=day;d<=n;d++)if(!lib.includes(d))c++;return Math.max(1,c);}
+function pulVal(f,t){if(!f)return 0;return t==='L'?(f.sl+f.sr):(f.sl+f.sr+f.sc);}
+function pulsoCalc(diasMap,mes,cob,t){
+  const fechas=Object.keys(diasMap||{}).filter(d=>d.slice(0,7)===mes).sort();if(!fechas.length)return null;
+  const m=metaDe(cob),meta=t==='L'?m.ml:m.mc;const tot=d=>(diasMap[d]||[]).find(x=>x.cal==='Total');
+  const dias=fechas.map((d,i)=>{const f=tot(d),fa=i?tot(fechas[i-1]):null;if(!f||!f.si)return null;
+    const v=pulVal(f,t),va=fa?pulVal(fa,t):0,rec=v-va,obj=f.si*meta,nec=Math.max(0,obj-va)/labDesde(mes,+d.slice(8,10));
+    return {d,rec,nec,ok:rec>=nec,v,si:f.si};}).filter(Boolean);
+  if(!dias.length)return null;
+  let malos=0;for(let i=dias.length-1;i>=0&&!dias[i].ok;i--)malos++;
+  const u=dias[dias.length-1],obj=u.si*meta,fal=Math.max(0,obj-u.v),hoy=fal/diasLabRest(mes||S.mes||hoyYMD().slice(0,7));
+  const serie=fechas.map(d=>{const pp=pctsF(tot(d));return {d,p:t==='L'?pp.pl:pp.pct};});
+  const pj=proyectar(serie,mes,meta);
+  // tramos
+  const cals=[...new Set(fechas.flatMap(d=>(diasMap[d]||[]).map(x=>x.cal)))].filter(c=>c&&c!=='Total');
+  const tramos=cals.map(cal=>{const recs=fechas.map((d,i)=>{const f=(diasMap[d]||[]).find(x=>x.cal===cal),fa=i?(diasMap[fechas[i-1]]||[]).find(x=>x.cal===cal):null;return f?pulVal(f,t)-(fa?pulVal(fa,t):0):null;}).filter(x=>x!=null);
+    const fu=(diasMap[fechas[fechas.length-1]]||[]).find(x=>x.cal===cal);if(!fu||!fu.si||!recs.length)return null;
+    let sin=0;for(let i=recs.length-1;i>=0&&recs[i]<=0.5;i--)sin++;
+    const n=recs.length,baja=n>=3&&recs[n-1]<recs[n-2]&&recs[n-2]<recs[n-3];
+    const ult=recs[n-1],juego=Math.max(0,fu.si-pulVal(fu,t));
+    const niv=sin>=3?'r':(sin===2||baja)?'a':ult>0?'v':'n';
+    return {cal,sin,baja,ult,juego,niv,si:fu.si};}).filter(Boolean);
+  const mejor=tramos.filter(x=>x.ult>0).sort((a,b)=>b.ult-a.ult)[0];
+  tramos.forEach(x=>x.mejor=mejor&&x.cal===mejor.cal);
+  const ordN={r:0,a:1,v:2,n:3};tramos.sort((a,b)=>ordN[a.niv]-ordN[b.niv]||(b.mejor-a.mejor)||(RANK_CAL[a.cal]??9)-(RANK_CAL[b.cal]??9));
+  return {dias,malos,u,meta,fal,hoy,pj,tramos,rojos:tramos.filter(x=>x.niv==='r')};}
+function pulSem(pj){if(!pj)return ['#f1f5f9','#334155','Sin proyección aún'];return {ok:['#dcfce7','#166534','✅ Vas bien'],warn:['#fef3c7','#92400e','⚠️ Estás justo'],bad:['#fee2e2','#991b1b','🚨 A este ritmo no llegas']}[pj.sem]||['#f1f5f9','#334155',''];}
+function pulTramoTxt(x){
+  if(x.niv==='r')return `<b>${x.sin} días sin recuperar nada</b> · saldo en juego ${m0(x.juego)}`;
+  if(x.niv==='a')return x.sin===2?`2 días sin recuperar · saldo en juego ${m0(x.juego)}`:`Bajó su recuperación 2 días seguidos · último día ${m$(x.ult)}`;
+  if(x.niv==='v')return `Recuperó ${m$(x.ult)} en el último corte${x.mejor?' · <b>tu mejor tramo</b>':''}`;
+  return `Sin movimiento en el último corte · saldo en juego ${m0(x.juego)}`;}
+function pulTramoBadge(x){const c={r:['#fee2e2','#991b1b','🔴'],a:['#fef3c7','#92400e','🟡'],v:['#dcfce7','#166534','🟢'],n:['#f1f5f9','#475569','⚪']}[x.niv];
+  return `<span class="badge" style="background:${c[0]};color:${c[1]};font-weight:800;min-width:74px;justify-content:center">${c[2]} Tramo ${esc(x.cal)}</span>`;}
+function pulsoHTML(r,t,chartId,toggle){
+  const tit=t==='L'?'Libera':'Contiene total',sm=pulSem(r.pj),u=r.u,mp=r.meta;
+  return `${toggle}
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;margin:10px 0">
+    <div style="background:${sm[0]};border-radius:12px;padding:10px 12px"><div class="xs b" style="color:${sm[1]}">${sm[2]}</div><div style="font:800 22px Montserrat,Inter,sans-serif;color:${sm[1]}">${pctTxt(u.v/u.si,1)} <span style="font-size:12px;font-weight:600">${r.pj?'proy. '+pctTxt(r.pj.prob,0)+' · ':''}meta ${pctTxt(mp,0)}</span></div></div>
+    <div style="background:${u.ok?'#ecfdf3':'#fef2f2'};border-radius:12px;padding:10px 12px"><div class="xs b" style="color:${u.ok?'#166534':'#991b1b'}">${u.ok?'✅ EL ÚLTIMO DÍA CUMPLISTE':'⚠️ EL ÚLTIMO DÍA TE QUEDASTE CORTO'}</div><div style="font:800 18px Montserrat,Inter,sans-serif;color:${u.ok?'#166534':'#991b1b'}">${m$(u.rec)} <span style="font-size:12px;font-weight:600">de ${m$(u.nec)}</span></div>
+      <div class="xs" style="color:#475569">${r.fal>0?`Hoy necesitas <b>${m$(r.hoy)}</b> en ${tit}`:'🎉 Meta cumplida'}${r.malos>=2?` · <b style="color:#991b1b">${r.malos} cortes seguidos bajo lo necesario</b>`:''}</div></div>
+  </div>
+  <div style="display:flex;gap:14px;font-size:12px;color:#475569;flex-wrap:wrap;margin-bottom:4px"><span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#2563eb"></span> Cumplió lo del día</span><span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#ef4444"></span> Se quedó corto</span><span><span style="display:inline-block;width:14px;border-top:2px dashed #b91c1c;vertical-align:middle"></span> Lo necesario por día</span></div>
+  <div style="position:relative;height:210px"><canvas id="${chartId}"></canvas></div>
+  <div class="b" style="color:var(--navy);margin:12px 0 4px">Alertas por tramo · ${tit}</div>
+  ${r.tramos.length?r.tramos.map(x=>`<div style="display:flex;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid #eef1f7;font-size:13.5px">${pulTramoBadge(x)}<span>${pulTramoTxt(x)}</span></div>`).join(''):'<div class="sm mut">Sin detalle por tramo.</div>'}`;}
+function pulsoChart(chartId,r){mkChart(chartId,{data:{labels:r.dias.map(x=>x.d.slice(8,10)+'/'+x.d.slice(5,7)),datasets:[
+  {type:'bar',label:'Recuperado',data:r.dias.map(x=>+x.rec.toFixed(2)),backgroundColor:r.dias.map(x=>x.ok?'#2563eb':'#ef4444'),borderRadius:4,maxBarThickness:26,order:2},
+  {type:'line',label:'Necesario',data:r.dias.map(x=>+x.nec.toFixed(2)),borderColor:'#b91c1c',borderDash:[6,4],borderWidth:2,pointRadius:2,pointBackgroundColor:'#b91c1c',tension:.25,order:1}]},
+  options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+m$(c.raw)}}},scales:{x:{grid:{display:false}},y:{beginAtZero:true,ticks:{callback:v=>m0(v)}}}}});}
+function pulToggle(t,fn){return `<div class="chips" style="margin:0"><span class="chip ${t==='L'?'on':''}" onclick="${fn}('L')">✅ Libera</span><span class="chip ${t==='C'?'on':''}" onclick="${fn}('C')">🛡️ Contiene total</span></div>`;}
+/* cobrador */
+function setPulCob(t){PUL_T_COB=t;renderCPulso();}
+function renderCPulso(){const box=$('cPulso');if(!box)return;const r=pulsoCalc(S.moraCob,S.mes,S.cob,PUL_T_COB);
+  if(!r){box.innerHTML='<h3>📊 Mi pulso diario</h3><div class="sub">Aparecerá cuando tu supervisor cargue la mora proyectada del mes.</div>';return;}
+  box.innerHTML=`<h3>📊 Mi pulso diario de recuperación</h3><div class="sub">Cuánto recuperaste en cada corte frente a lo que necesitas por día · corte ${dmy(r.u.d)}</div>`+pulsoHTML(r,PUL_T_COB,'chCPulso',pulToggle(PUL_T_COB,'setPulCob'));
+  pulsoChart('chCPulso',r);}
+/* supervisor */
+function pulMapSup(cob){const o={};S.mora.forEach(s=>{const f=(s.filas||[]).filter(x=>x.cob===cob);if(f.length)o[s.id]=f;});return o;}
+function setPulSup(t){PUL_T_SUP=t;renderPulsoSup();}
+function renderPulsoSup(){const box=$('sPulso');if(!box)return;const t=PUL_T_SUP;
+  const rows=COBS.map(c=>({c,r:pulsoCalc(pulMapSup(c.id),S.mes,c.id,t)})).filter(x=>x.r);
+  if(!rows.length){box.innerHTML='<h3>📊 Pulso diario del equipo</h3><div class="sub">Carga la mora proyectada del mes para ver la recuperación diaria.</div>';return;}
+  const conR=rows.filter(x=>x.r.rojos.length),cortos=rows.filter(x=>!x.r.u.ok);
+  const ordS={bad:0,warn:1,ok:2};rows.sort((a,b)=>(b.r.rojos.length-a.r.rojos.length)||((ordS[a.r.pj?.sem]??3)-(ordS[b.r.pj?.sem]??3))||(b.r.malos-a.r.malos));
+  box.innerHTML=`<div class="ch"><div><h3>📊 Pulso diario del equipo</h3><div class="sub">Recuperación del último corte frente a lo necesario por día, proyección y tramos sin recuperar</div></div>${pulToggle(t,'setPulSup')}</div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 10px">
+    <div style="background:${conR.length?'#fee2e2':'#dcfce7'};color:${conR.length?'#991b1b':'#166534'};border-radius:10px;padding:8px 12px;font-weight:700;font-size:13.5px">🔴 ${conR.length} cobrador${conR.length===1?'':'es'} con tramos 3+ días sin recuperar</div>
+    <div style="background:${cortos.length?'#fef3c7':'#dcfce7'};color:${cortos.length?'#92400e':'#166534'};border-radius:10px;padding:8px 12px;font-weight:700;font-size:13.5px">⚠️ ${cortos.length} se quedaron cortos en el último corte</div></div>
+  <div class="tw"><table><thead><tr><th>Cobrador</th><th>Señal del mes</th><th class="num">Último corte</th><th class="num">Necesario</th><th class="num">Cortes seguidos corto</th><th class="num">Hoy necesita</th><th>Tramos en alerta</th><th></th></tr></thead><tbody>${rows.map(({c,r})=>{const sm=pulSem(r.pj);const al=r.tramos.filter(x=>x.niv==='r'||x.niv==='a');
+    return `<tr><td class="cobn">${esc(c.corto)}</td><td><span class="badge" style="background:${sm[0]};color:${sm[1]};font-weight:800">${sm[2]}</span><div class="xs mut">${r.pj?'proy. '+pctTxt(r.pj.prob,1)+' · meta '+pctTxt(r.meta,0):''}</div></td>
+    <td class="num b" style="color:${r.u.ok?'#166534':'#b91c1c'}">${m$(r.u.rec)}</td><td class="num">${m$(r.u.nec)}</td><td class="num ${r.malos>=3?'bad b':''}">${r.malos}</td><td class="num">${r.fal>0?m$(r.hoy):'✔'}</td>
+    <td>${al.length?al.map(x=>`<span class="badge" style="background:${x.niv==='r'?'#fee2e2':'#fef3c7'};color:${x.niv==='r'?'#991b1b':'#92400e'};font-weight:800;margin:1px">${esc(x.cal)}${x.sin?' · '+x.sin+'d':' · ↓'}</span>`).join(''):'<span class="xs mut">—</span>'}</td>
+    <td><button class="btn ghost sm" onclick="verPulso('${c.id}')">Ver</button></td></tr>`;}).join('')}</tbody></table></div>
+  <div class="xs mut" style="margin-top:6px">🔴 tramo con 3 o más cortes seguidos sin recuperar · 🟡 2 cortes sin recuperar o bajando 2 cortes seguidos · "Necesario" = lo que le faltaba para la meta repartido en los días laborales que quedaban.</div>`;}
+function verPulso(cob){const t=PUL_T_SUP,r=pulsoCalc(pulMapSup(cob),S.mes,cob,t);if(!r)return;
+  modal(`<h3 style="margin:0 0 4px">📊 ${esc(COB_BY_ID[cob].corto)} · pulso diario</h3><div class="sub" style="margin-bottom:6px">Corte ${dmy(r.u.d)}</div>${pulsoHTML(r,t,'chMPulso',pulToggle(t,"(t=>{PUL_T_SUP=t;closeModal();renderPulsoSup();verPulso('"+cob+"')})"))}<div style="text-align:right;margin-top:10px"><button class="btn ghost" onclick="closeModal()">Cerrar</button></div>`);
+  $('modalBox').style.maxWidth='760px';pulsoChart('chMPulso',r);}
 function renderCGest(){const id=S.cob,arr=S.gest[id]||[];const q=calidadDe(arr);const cl=(S.listado[id]?.cl)||[];const st=gestSet(id);const sin=cl.filter(x=>!st.has(String(x.cod)));
   const big=(t,v,c)=>`<div style="display:flex;justify-content:space-between;font-size:16px;font-weight:800;padding:6px 0;border-bottom:1px solid #eef1f7;color:${c}"><span>${t}</span><span>${v}</span></div>`;
   $('cGest').innerHTML=`<h3>📝 Mis gestiones del mes</h3><div class="sub">${q.n?`${q.n} visitas a ${q.cli} clientes`:'Tu supervisor aún no carga las gestiones de este mes.'}</div>
@@ -1820,7 +1905,7 @@ function renderCGest(){const id=S.cob,arr=S.gest[id]||[];const q=calidadDe(arr);
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;background:#fef2f2;border-radius:12px;padding:12px"><div><div class="xs b" style="color:#991b1b">🚫 CLIENTES SIN GESTIONAR</div><div style="font:800 24px Montserrat,Inter,sans-serif;color:#991b1b">${sin.length} <span style="font-size:14px">de ${cl.length}</span></div><div class="xs mut">saldo ${m0(sin.reduce((t,x)=>t+x.sc,0))}</div></div>
     <button class="btn red sm" onclick="cView='singes';cPage=0;goTab('c-cartera')">Ver lista</button></div>`;}
 function renderCInicio(){
-  renderCMetaMora();renderCCobro();
+  renderCMetaMora();renderCPulso();renderCCobro();
   const id=S.cob,c=COB_BY_ID[id],m=metaDe(id),mes=S.mes,ag=agregRegs(S.regs,mes)[id],dm=diasMes(mes),dt=diaTranscurrido(mes),ritmo=dt/dm,rest=Math.max(1,dm-dt+1);
   const pr=m.rm?ag.ret/m.rm:0,pf=m.fm?ag.refi/m.fm:0;
   const falR=Math.max(0,m.rm-ag.ret),falF=Math.max(0,m.fm-ag.refi);
