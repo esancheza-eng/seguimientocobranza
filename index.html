@@ -1022,9 +1022,14 @@ function renderRefis(){
     COBS.map(c=>`<tr><td class="cobn nowrap">${esc(c.corto)}</td>`+hs.map(h=>{const v=h.cobs[c.id]||{n:0,m:0};return `<td class="num">${v.n}<div class="xs mut">${m0(v.m)}</div></td>`;}).join('')+'</tr>').join('')+'</tbody>'+
     '<tfoot><tr><td>Zona</td>'+hs.map(h=>{let n=0,m=0;Object.values(h.cobs).forEach(v=>{n+=v.n;m+=v.m;});return `<td class="num">${n}<div class="xs">${m0(m)}</div></td>`;}).join('')+'</tr></tfoot>'
     :'<tbody><tr><td class="mut center" style="padding:18px">Aún no hay fotos de este mes. Se crean cada vez que guardas refinanciamientos.</td></tr></tbody>';
-  $('tbRefiDet').innerHTML='<thead><tr><th>Fecha crédito</th><th>Cobrador</th><th>Cliente</th><th>Cédula</th><th>Cod crédito</th><th>Cal. mensual</th><th>Tienda</th><th>Línea</th><th class="num">Saldo crédito final</th><th class="num">Saldo actual</th></tr></thead><tbody>'+
-    (det.length?det.map(x=>`<tr><td class="nowrap">${dmy(x.fc)}</td><td class="cobn nowrap">${esc(x.cob)}</td><td>${esc(x.nom)}</td><td>${esc(x.ced)}</td><td>${esc(x.cc)}</td><td>${calBadge(x.cal)}</td><td class="sm">${esc(x.tienda)}</td><td class="sm">${esc(x.linea)}</td><td class="num b">${m$(x.saldo)}</td><td class="num">${x.cancel?'<span class="badge r-Mejora">Cancelado</span>':m$(x.ult??x.saldo)}</td></tr>`).join(''):'<tr><td colspan="10" class="center mut" style="padding:24px">Sin refinanciamientos en el rango</td></tr>')+'</tbody>';
+  const lsIdx=refiLsIdx();
+  $('tbRefiDet').innerHTML='<thead><tr><th>Fecha crédito</th><th>Cobrador</th><th>Cliente</th><th>Cédula</th><th>Cod crédito</th><th class="center">Cal. mensual</th><th class="center">Rodamiento</th><th>Tienda</th><th>Línea</th><th class="num">Saldo crédito final</th></tr></thead><tbody>'+
+    (det.length?det.map(x=>`<tr><td class="nowrap">${dmy(x.fc)}</td><td class="cobn nowrap">${esc(x.cob)}</td><td>${esc(x.nom)}</td><td>${esc(x.ced)}</td><td>${esc(x.cc)}</td>${refiCalCells(x,lsIdx)}<td class="sm">${esc(x.tienda)}</td><td class="sm">${esc(x.linea)}</td><td class="num b">${m$(x.saldo)}</td></tr>`).join(''):'<tr><td colspan="10" class="center mut" style="padding:24px">Sin refinanciamientos en el rango</td></tr>')+'</tbody>';
 }
+function refiLsIdx(){const byCc=new Map(),byCed=new Map();Object.values(S.listado||{}).forEach(l=>(l.cl||[]).forEach(c=>{if(c.ced)byCed.set(String(c.ced).trim(),c);(c.creds||[]).forEach(k=>{if(k.cc)byCc.set(String(k.cc).trim(),c);});}));return {byCc,byCed};}
+function refiCalCells(x,ix){const c=ix.byCc.get(String(x.cc||'').trim())||ix.byCed.get(String(x.ced||'').trim());
+  if(!c)return `<td class="center">${calBadge(x.cal)}<div class="xs mut">sin listado</div></td><td class="center"><span class="xs mut">—</span></td>`;
+  return `<td class="center">${calBadge(c.cm)}</td><td class="center">${rodBadge(c.rod)}</td>`;}
 let rfSem=null;
 function setRfSem(i){rfSem=i;renderRefiSem();}
 function renderRefiSem(){
