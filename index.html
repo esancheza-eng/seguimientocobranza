@@ -308,7 +308,6 @@ canvas{max-width:100%}
   <nav class="tabs" id="azTabs"></nav>
 </header>
 <main id="azMain"></main>
-<input type="file" id="azFileD" accept=".xlsx,.xlsm,.xls" multiple class="hidden" onchange="azLeerDiario(this.files);this.value=''">
 <input type="file" id="azFileE" accept=".xlsx,.xlsm,.xls" multiple class="hidden" onchange="azLeerEnt(this.files);this.value=''">
 <input type="file" id="azFile" accept=".xlsx,.xlsm,.xls" class="hidden" onchange="azLeer(this.files[0]);this.value=''">
 </section>
@@ -2298,7 +2297,7 @@ async function mostrarAustro(){
   $('azTabs').innerHTML=AZ_TABS.map(([id,t])=>`<button data-t="${id}" onclick="azGo('${id}')">${t}</button>`).join('');
   $('azMain').innerHTML='<div class="card az-empty"><b>Cargando Zona Austro…</b></div>';
   await azLoad(AZ.mes||S.mes);azMesOpts();
-  azGo(azCut()?'az-resumen':'az-cargar');
+  azGo(azCut()?(azCut().origen==='det'?'az-cob':'az-resumen'):'az-cargar');
 }
 async function azCambiarMes(m){AZ.tmp=null;AZ.tmpD=null;AZ.tmpE=null;await azLoad(m);azGo(azCut()?AZ.tab:'az-cargar');}
 async function azActualizar(){const k=AZ.corte;await azLoad(AZ.mes);if(k&&AZ.doc.cortes[k])AZ.corte=k;toast('Datos actualizados');azRender();}
@@ -2317,8 +2316,9 @@ function azRender(){
   const c=azCut(),m=$('azMain');
   $('azT2').textContent=c?`${mesNombre(AZ.mes)} · Semana ${c.sem} · Corte ${azDMY(c.fecha)}`:`${mesNombre(AZ.mes)} · Sin cortes cargados`;
   if(AZ.tab==='az-cargar'){m.innerHTML=azVCargar(c);return;}
-  if(!c){m.innerHTML=`<div class="card az-empty"><b>Aún no hay cortes en ${esc(mesNombre(AZ.mes))}</b>Sube el Excel de Seguimiento de Cobranza Zona Austro para empezar.<div style="margin-top:14px"><button class="btn gold" onclick="azGo('az-cargar')">⬆️ Ir a Cargar datos</button></div></div>`;return;}
+  if(!c){m.innerHTML=`<div class="card az-empty"><b>Aún no hay cortes en ${esc(mesNombre(AZ.mes))}</b>Sube los archivos de Mora Proyectada por Cobrador y por Tienda para empezar.<div style="margin-top:14px"><button class="btn gold" onclick="azGo('az-cargar')">⬆️ Ir a Cargar datos</button></div></div>`;return;}
   if((AZ.tab==='az-cob'||AZ.tab==='az-tie')&&AZ.detsMes!==AZ.mes+'|'+azCuts().join(',')){m.innerHTML='<div class="card az-empty"><b>Cargando detalle…</b></div>';azDetsEnsure().then(azRender);return;}
+  if(c.origen==='det'&&AZ.tab!=='az-cob'&&AZ.tab!=='az-tie'){m.innerHTML=azTools(c)+`<div class="card az-empty"><b>Esta pestaña usa el Excel de Seguimiento de Cobranza</b>El corte del ${azDMY(c.fecha)} se cargó solo con los archivos de cobradores y tiendas. Revisa las pestañas Tiendas y Cobradores.<div style="margin-top:14px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button class="btn gold" onclick="azGo('az-cob')">👥 Ver cobradores</button><button class="btn ghost" onclick="azGo('az-tie')">🏬 Ver tiendas</button></div></div>`;return;}
   const f={'az-cob':x=>azVEnt(x,'cob'),'az-tie':x=>azVEnt(x,'tie'),'az-resumen':azVResumen,'az-coord':azVCoord,'az-retref':azVRetRef,'az-plan':azVPlan,'az-cc':azVCC,'az-tend':azVTend}[AZ.tab];
   try{m.innerHTML=f(c);if(AZ.tab==='az-tend')azChart(c);if(AZ.tab==='az-cob'||AZ.tab==='az-tie')azChartEnt();}catch(e){console.error(e);m.innerHTML='<div class="errbox">No se pudo mostrar esta pestaña con el corte seleccionado.</div>';}
 }
@@ -2402,7 +2402,7 @@ function azVCC(c){
   return azTools(c)+kp+`<div class="grid g2"><div class="card"><h3>Insights de Contact Center</h3><div class="sub">Zona Austro · texto del Excel de seguimiento</div>${tx?`<div class="az-txt">${azT(tx)}</div>`:''}${ins}</div>
 <div class="card"><h3>Tiendas a intervenir</h3><div class="sub">Mora proyectada total · tiendas incluidas en el Excel de seguimiento</div>
 ${tf?`<div class="tw"><table><thead><tr><th>Tienda</th><th class="num">Mora proy.</th><th>Coord.</th><th>Acción prioritaria</th></tr></thead><tbody>${tf}</tbody></table></div>`:'<div class="mut sm">El Excel no trae tiendas a intervenir.</div>'}
-<div class="warnbox">El detalle de Contact Center por tienda, tramo y coordinador se activará cuando se configure el archivo 4 de la pestaña Cargar datos.</div></div></div>
+<div class="warnbox">El detalle de Contact Center por tienda, tramo y coordinador se activará cuando se configure el archivo 3 de la pestaña Cargar datos.</div></div></div>
 <div class="card" style="margin-top:14px"><h3>Enfoque telefónico por coordinación</h3><div class="sub">Semana ${c.sem}</div><div class="tw"><table><thead><tr><th>Coordinación</th><th>Enfoque</th></tr></thead><tbody>${enf}</tbody></table></div></div>`;
 }
 function azVTend(c){
@@ -2448,18 +2448,15 @@ function azVCargar(c){
     prev=`<div class="okbox"><b>Archivo leído: ${esc(x.archivo)}</b><br>Mes: ${esc(mesNombre(mes))} · Semana ${x.sem} · Fecha de corte: ${azDMY(x.fecha)}<br>Coordinaciones: ${x.bloques.map(b=>esc(azNom(b.n))).join(', ')}<br>Tiendas a intervenir: ${x.tiendas.length} · Insights: ${x.insights.length} · Semanas con meta: ${x.semanas.length}</div>
 ${AZ.tmp.avisos.map(a=>`<div class="warnbox">⚠️ ${esc(a)}</div>`).join('')}${ya?`<div class="warnbox">Ya existe un corte del ${azDMY(x.fecha)}: al guardar se reemplaza.</div>`:''}
 <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn gold" onclick="azGuardarCorte()">💾 Guardar corte en línea</button><button class="btn ghost" onclick="AZ.tmp=null;azRender()">Cancelar</button></div>`;}
-  const ult=c?`<div style="margin-top:8px"><span class="az-tg ok">Cargado</span> <span class="sm" style="color:#166534;font-weight:600">${esc(c.archivo||'')} · corte ${azDMY(c.fecha)}</span></div>`:'<div style="margin-top:8px"><span class="az-tg gr">Pendiente de subir</span></div>';
+  const ult=c&&c.origen!=='det'?`<div style="margin-top:8px"><span class="az-tg ok">Cargado</span> <span class="sm" style="color:#166534;font-weight:600">${esc(c.archivo||'')} · corte ${azDMY(c.fecha)}</span></div>`:'<div style="margin-top:8px"><span class="az-tg gr">Pendiente de subir</span></div>';
   const pend=(i,t,d)=>`<div class="az-up"><div class="az-n">${i}</div><div><h4>${t}</h4><p>${d}</p><div style="margin-top:8px"><span class="az-tg gr">Pendiente de configurar</span></div><p style="margin-top:6px">Falta un archivo de ejemplo para programar su lectura.</p></div></div>`;
-  return `<div class="info" style="margin:0 0 14px">Se sube el Excel tal como está hoy. La app lo lee, guarda el corte en línea y actualiza todas las pestañas. No hay que descargar ni reinstalar nada.</div>
+  return `<div class="info" style="margin:0 0 14px">Sube los archivos tal como los descargas. La app los lee, guarda el corte en línea y actualiza las pestañas. No hay que descargar ni reinstalar nada.</div>
 <div class="grid g2">
-<div class="az-up ${c?'done':''}"><div class="az-n">1</div><div style="flex:1;min-width:0"><h4>Seguimiento de Cobranza Zona Austro</h4><p>Resultados de la zona frente a las metas, retiros, refinanciamientos y planes de acción (hojas ACUMULADO, SEG. SEMANAL y CARGA DIARIA).</p>${ult}
+<div class="az-up ${c&&c.origen!=='det'?'done':''}"><div class="az-n">1</div><div style="flex:1;min-width:0"><h4>Seguimiento de Cobranza Zona Austro <span class="az-tg gr">Opcional</span></h4><p>Resultados de la zona frente a las metas, retiros, refinanciamientos y planes de acción (hojas ACUMULADO, SEG. SEMANAL y CARGA DIARIA).</p>${ult}
 <div style="margin-top:10px"><button class="btn" onclick="$('azFile').click()">⬆️ ${c?'Subir un nuevo corte':'Subir Excel'}</button></div>${prev}</div></div>
-<div class="az-up ${c&&c.origen==='diario'?'done':''}"><div class="az-n">2</div><div style="flex:1;min-width:0"><h4>Mora diaria por coordinador</h4><p>Los "Resumen por Calificación" de cada coordinador (uno por archivo). Selecciónalos todos juntos: actualizan la mora por tramo de cada coordinación y de la zona, y crean el corte del día.</p>
-${c&&c.origen==='diario'?`<div style="margin-top:8px"><span class="az-tg ok">Cargado</span> <span class="sm" style="color:#166534;font-weight:600">corte ${azDMY(c.fecha)}</span></div>`:'<div style="margin-top:8px"><span class="az-tg gr">Pendiente de subir</span></div>'}
-<div style="margin-top:10px"><button class="btn" onclick="$('azFileD').click()">⬆️ Subir archivos de coordinadores</button></div>${azPrevDiario()}</div></div>
-<div class="az-up"><div class="az-n">3</div><div style="flex:1;min-width:0"><h4>Mora proyectada por cobrador y por tienda</h4><p>Los archivos "Mora Proyectada por Cobrador" y "Mora Proyectada por Tienda" de cada coordinador. Puedes seleccionarlos todos juntos: la app reconoce cuál es cuál. Se muestran solo los activos; el total queda como viene en el archivo.</p>
+<div class="az-up ${c&&c.origen==='det'?'done':''}"><div class="az-n">2</div><div style="flex:1;min-width:0"><h4>Mora proyectada por cobrador y por tienda</h4><p>Los archivos "Mora Proyectada por Cobrador" y "Mora Proyectada por Tienda" de cada coordinador. Selecciónalos todos juntos (Ctrl + clic): la app reconoce cuál es cuál y a qué coordinación pertenece, y crea el corte del día. Se muestran solo los activos; el total queda como viene en el archivo.</p>
 <div style="margin-top:10px"><button class="btn" onclick="$('azFileE').click()">⬆️ Subir archivos de cobradores y tiendas</button></div>${azPrevEnt()}</div></div>
-${pend(4,'Indicadores de Contact Center','Conectividad, compromisos y efectividad por tienda, tramo y coordinador.')}
+${pend(3,'Indicadores de Contact Center','Conectividad, compromisos y efectividad por tienda, tramo y coordinador.')}
 </div>
 <div class="card" style="margin-top:14px"><h3>Qué se guarda</h3><div class="sub">Información agregada, sin base de clientes</div><div class="az-txt" style="margin:0">Solo se guardan los indicadores por zona, coordinación y tramo, los textos de alertas y planes, y las tiendas a intervenir que trae el Excel. No se sube el listado de clientes ni datos personales. Cada corte se identifica por su fecha de reporte: si subes dos veces la misma fecha, el segundo reemplaza al primero.</div></div>`;
 }
@@ -2552,7 +2549,7 @@ ${av.map(a=>`<div class="warnbox">⚠️ ${esc(a)}</div>`).join('')}
 }
 
 /* ---------- ZONA AUSTRO · mora por cobrador y por tienda (solo activos; el total incluye todo el archivo) ---------- */
-const AZ_TR2=['A','B','C','D','E','E1'];
+const AZ_TR2=['A','B','C','D','E','E1'];const AZ_COORDS_DEF=['MACHALA','CUENCA/LOJA','MILAGRO','QUEVEDO'];
 const AZ_ACT={cob:{
  'MILAGRO':['OLAYA ACURIO JOSE GABRIEL','BRYAN EDUARDO PAREDES PERALTA','MOSQUERA MEDINA HECTOR DANIEL','GUILLERMO MONTANO LUIS AGUSTIN','AGUILAR CONTRERAS BYRON LUIS','MENDOZA JIMENEZ VICTOR DARIO','CHAVEZ GOMEZCUELLO MARIO JAVIER','MILLAN CARVAJAL RAFAEL ENRIQUE','VILLARREAL NAVARRETE FAUSTO ALBERTO','AVILES ABAD JORDY ALEXANDER','ORTEGA URGILES CELIO ISAIAS','CARRANZA JIMENEZ FRANKLIN GEOVANNY','JARA LLIGUIN JULIO LEONARDO','NEDER MENDOZA CARLOS ADRIAN'],
  'QUEVEDO':['CERNA TELLO WILSON ROBERTO','AROCA MUNOZ LEONARDO ENRIQUE','ANDRADE FERNANDEZ JEFFERSON VICENTE','TRIVINO MOSQUERA CARLOS ANTONIO','ARCE QUINTANA BYRON RUDDY','SANCHEZ YANEZ CHRISTIAN DAVID','SANABRIA MENDOZA ANGEL VICENTE','SALAZAR VILLASAGUA JAIRON LEONEL','ALVARADO RIZZO EUCEBIO FABIAN','MORALES VARELA JEFFERSON ALEXANDER','RIVAS LOOR ISRRAEL EDUARDO','VERA PEÑARRIETA KEVIN ALFONSO','CAGUANO BAZURTO CARLOS MARCELO','RIVERA CUASPUD OSWALDO ALEXANDER','LEMA VERA CARLOS ALBERTO','TAPIA SOLORZANO EULISES LEONEL','SANTANA LLORENTE EITHEL EDUARDO'],
@@ -2605,32 +2602,38 @@ function azMapEnt(f,coords){
 async function azLeerEnt(files){
   files=[...(files||[])];if(!files.length)return;AZ.tmpE=null;AZ.tmpEErr='';
   if(!window.XLSX){AZ.tmpEErr='No se pudo cargar el lector de Excel. Revisa tu conexión.';return azRender();}
-  const c=azCut();if(!c){AZ.tmpEErr='Primero carga un corte (archivo 1 o 2): el detalle se guarda dentro de un corte.';return azRender();}
-  try{const coords=azCoords(c).map(b=>b.n);const arr=[];
+  try{const c=azCut();const coords=c?azCoords(c).map(b=>b.n):AZ_COORDS_DEF.slice();const arr=[];
     for(const f of files){const b=await f.arrayBuffer();const p=azParseEnt(XLSX.read(new Uint8Array(b),{type:'array'}),f.name);azMapEnt(p,coords);arr.push(p);}
-    AZ.tmpE={files:arr,coords};
+    AZ.tmpE={files:arr,coords,fecha:hoyYMD()};
   }catch(e){console.error(e);AZ.tmpEErr=e.message||'No se pudieron leer los archivos.';}
   azRender();
 }
 async function azGuardarEnt(){
-  const d=AZ.tmpE,k=AZ.corte;if(!d||!k)return;
+  const d=AZ.tmpE;if(!d)return;const fecha=d.fecha;
+  if(!fecha)return toast('Indica la fecha de corte');
+  if(fecha.slice(0,7)!==AZ.mes)return toast('La fecha de corte debe ser de '+mesNombre(AZ.mes)+'. Cambia el mes arriba si corresponde.',5000);
+  const k='c'+fecha;let nuevo=false;
+  if(!AZ.doc.cortes[k]){const base=azBaseDiario(fecha);nuevo=true;
+    AZ.doc.cortes[k]={archivo:'Cobradores y tiendas',ts:Date.now(),origen:'det',mesTxt:'',fecha,sem:(base&&azSemDe(base,fecha))||Math.min(5,Math.ceil(+fecha.slice(8,10)/7)),bloques:d.coords.map(n=>({n,meta:[],real:[],pp:[],difD:[]})),palancas:[],insights:[],tiendas:[],semanas:[],rangos:[]};}
+  AZ.corte=k;
   if(d.files.some(f=>!f.n))return toast('Elige la coordinación de cada archivo');
   const ks=d.files.map(f=>f.kind+'|'+f.n);if(new Set(ks).size!==ks.length)return toast('Hay dos archivos del mismo tipo para la misma coordinación');
-  if(AZ.detKey!==k)await azDetLoad();
-  const det=JSON.parse(JSON.stringify(AZ.det||{cob:{},tie:{}}));
+  await azDetsEnsure();if(!(k in AZ.dets)||nuevo&&!AZ.dets[k]){try{const x=await DB.get(azDetId(k));AZ.dets[k]=x?{cob:x.cob||{},tie:x.tie||{}}:null;}catch(e){AZ.dets[k]=null;}}
+  const det=JSON.parse(JSON.stringify(AZ.dets[k]||{cob:{},tie:{}}));
   d.files.forEach(f=>{det[f.kind][azId(f.n)]={coord:f.n,archivo:f.archivo,coordinador:f.coordinador,items:f.items};});
-  try{await DB.set(azDetId(k),det);}catch(e){console.error(e);return toast('No se pudo guardar: '+(e.code||e.message),5000);}
-  AZ.det=det;AZ.detKey=k;AZ.dets[k]=det;AZ.doc.coordMap=AZ.doc.coordMap||{};d.files.forEach(f=>{if(f.coordinador)AZ.doc.coordMap[azId(f.coordinador)]=f.n;});await azSave();
-  const kind=d.files[0].kind;AZ.tmpE=null;toast('✅ Detalle guardado en el corte del '+azDMY(azCut().fecha));azGo(AZ_ENT[kind].tab);
+  try{await DB.set(azDetId(k),det);}catch(e){console.error(e);if(nuevo)delete AZ.doc.cortes[k];const ks=azCuts();AZ.corte=ks.length?ks[ks.length-1]:null;return toast('No se pudo guardar: '+(e.code||e.message),5000);}
+  AZ.det=det;AZ.detKey=k;AZ.dets[k]=det;AZ.doc.coordMap=AZ.doc.coordMap||{};d.files.forEach(f=>{if(f.coordinador)AZ.doc.coordMap[azId(f.coordinador)]=f.n;});if(!(await azSave()))return;azMesOpts();
+  AZ.tmpE=null;toast('✅ Corte del '+azDMY(fecha)+' guardado');azGo('az-cob');
 }
 function azPrevEnt(){
   if(AZ.tmpEErr)return `<div class="errbox">${esc(AZ.tmpEErr)}</div>`;
-  const d=AZ.tmpE;if(!d)return '';const c=azCut();
+  const d=AZ.tmpE;if(!d)return '';const ya=d.fecha&&AZ.doc.cortes['c'+d.fecha];
   const rows=d.files.map((f,i)=>{const act=f.n?azActSet(f.kind,f.n):new Set();const na=f.items.filter(it=>act.has(azEK(it.n))).length;const ok=f.gt==null||Math.abs(f.gt-f.sum)<1;
     return `<tr><td class="xs"><b>${esc(f.coordinador||'—')}</b><div class="mut">${esc(f.archivo)}</div></td><td><span class="az-tg inf">${AZ_ENT[f.kind].pl}</span></td><td><select class="inp" style="padding:5px 8px;font-size:12.5px" onchange="AZ.tmpE.files[${i}].n=this.value;azRender()"><option value="">— elegir —</option>${d.coords.map(n=>`<option value="${esc(n)}" ${n===f.n?'selected':''}>${esc(azNom(n))}</option>`).join('')}</select></td><td class="num">${na} de ${f.items.length}</td><td class="num">${azM(f.sum)}${ok?'':' <span class="az-tg bad">≠ total</span>'}</td></tr>`;}).join('');
   return `<div class="okbox" style="background:#fff"><div class="tw"><table><thead><tr><th>Coordinador / archivo</th><th>Tipo</th><th>Coordinación</th><th class="num">Activos</th><th class="num">Saldo inicial</th></tr></thead><tbody>${rows}</tbody></table></div></div>
-<div class="warnbox">Se guardará dentro del corte del <b>${azDMY(c.fecha)}</b> (el que estás viendo). Si los datos son de otro día, elige o crea primero ese corte.</div>
-<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn gold" onclick="azGuardarEnt()">💾 Guardar detalle</button><button class="btn ghost" onclick="AZ.tmpE=null;azRender()">Cancelar</button></div>`;
+<div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="az-lbl" style="margin:0">Fecha de corte</span><input type="date" class="inp" style="width:auto;padding:7px 10px" value="${esc(d.fecha||'')}" onchange="AZ.tmpE.fecha=this.value;azRender()"></div>
+${ya?`<div class="warnbox">Ya existe un corte del ${azDMY(d.fecha)}: estos archivos reemplazan los de la misma coordinación en ese corte.</div>`:''}
+<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn gold" onclick="azGuardarEnt()">💾 Guardar corte</button><button class="btn ghost" onclick="AZ.tmpE=null;azRender()">Cancelar</button></div>`;
 }
 /* ---- análisis igual al Panel de Supervisión (mora proyectada), por coordinación ---- */
 const azE3=a=>a&&a[0]?{lib:a[2]/a[0],con:a[1]/a[0],ct:(a[1]+a[2])/a[0]}:{lib:null,con:null,ct:null};
