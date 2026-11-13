@@ -230,7 +230,7 @@ canvas{max-width:100%}
 @media(max-width:640px){.az-g5{grid-template-columns:1fr}}
 .az-2a{grid-template-columns:1.25fr 1fr}.az-2b{grid-template-columns:1.55fr 1fr}
 @media(max-width:900px){.az-2a,.az-2b{grid-template-columns:1fr}}
-.az-tg{display:inline-block;border-radius:999px;padding:2px 9px;font-size:12px;font-weight:800;white-space:nowrap}
+.az-tg{display:inline-block;border-radius:999px;padding:2px 8px;font-size:11px;font-weight:700;white-space:nowrap}
 .az-tg.ok{background:#dcfce7;color:#166534}.az-tg.bad{background:#fee2e2;color:#991b1b}.az-tg.warn{background:#fef3c7;color:#92400e}.az-tg.inf{background:#e0e9ff;color:#1e3a8a}.az-tg.gr{background:#eef1f7;color:#475569}
 .az-hm{border-radius:9px;padding:7px 4px;text-align:center;font-weight:800;font-size:13px;line-height:1.25;min-width:84px}
 .az-hm small{display:block;font-size:10.5px;font-weight:700;opacity:.9}
@@ -249,7 +249,7 @@ canvas{max-width:100%}
 .az-neg{color:#b91c1c;font-weight:700}.az-pos{color:#166534;font-weight:700}
 #modAustro table th.num{text-align:right}#modAustro table th.ctr,#modAustro table td.ctr{text-align:center}
 #modAustro .tw{max-height:none}
-@media print{#modAustro header.app nav.tabs,#modAustro .az-noprint,#modAustro .hd-r{display:none!important}#modAustro header.app{position:static}#modAustro .card{box-shadow:none;break-inside:avoid}}
+@media print{#modAustro header.app nav.tabs,#modAustro .az-noprint,#modAustro .hd-r,#modAustro footer.app{display:none!important}#modAustro header.app{position:static}#modAustro .card{box-shadow:none;break-inside:avoid}}
 @media(max-width:640px){#azPill{display:none}#modAustro .hd-r{gap:5px}#modAustro .hd-r .pill{padding:5px 8px;font-size:11px}#modAustro .hd-tt .t1{font-size:13px;line-height:1.2}#azMes{max-width:112px}#modAustro .az-hm{min-width:74px}}
 @media(max-width:640px){#modAustro .az-c360{display:none}}
 </style>
@@ -308,6 +308,7 @@ canvas{max-width:100%}
   <nav class="tabs" id="azTabs"></nav>
 </header>
 <main id="azMain"></main>
+<footer class="app">Zona Austro · Control 360 · Marcimex · Christian Sánchez</footer>
 <input type="file" id="azFileE" accept=".xlsx,.xlsm,.xls" multiple class="hidden" onchange="azLeerEnt(this.files);this.value=''">
 <input type="file" id="azFile" accept=".xlsx,.xlsm,.xls" class="hidden" onchange="azLeer(this.files[0]);this.value=''">
 </section>
@@ -2145,8 +2146,8 @@ const AZ_MESES={ENERO:1,FEBRERO:2,MARZO:3,ABRIL:4,MAYO:5,JUNIO:6,JULIO:7,AGOSTO:
 
 /* ---------- utilidades ---------- */
 const azNum=v=>(typeof v==='number'&&isFinite(v))?v:null;
-const azP=(v,d=2)=>(v==null||isNaN(v))?'—':fmt(v*100,d)+' %';
-const azPP=v=>(v==null||isNaN(v))?'—':(v>=0?'+':'−')+fmt(Math.abs(v)*100,2)+' p.p.';
+const azP=(v,d=2)=>(v==null||isNaN(v))?'—':fmt(v*100,d)+'%';
+const azPP=v=>(v==null||isNaN(v))?'—':(v>=0?'+':'−')+fmt(Math.abs(v)*100,2)+' pp';
 const azM=v=>(v==null||isNaN(v))?'—':(v<0?'-':'')+'$'+fmt(Math.abs(v),0);
 const azMM=v=>(v==null||isNaN(v))?'—':'$'+fmt(v/1e6,2)+' M';
 const azT=s=>esc(s==null?'':s).replace(/\n/g,'<br>');
@@ -2324,7 +2325,8 @@ function azRender(){
 }
 
 /* ---------- vistas ---------- */
-const azKpi=(lb,vl,ft,acc,bar)=>`<div class="card kpi" ${acc?`style="--accent:${acc}"`:''}><div class="lb">${lb}</div><div class="vl">${vl}</div><div class="ft">${ft}</div>${bar||''}</div>`;
+const AZ_IC=[['Cartera','💼'],['Contiene','📈'],['Mejora','🚀'],['Retiros','🚚'],['Refinanc','♻️'],['Total palancas','🎯'],['Conectividad','📞'],['Tasa','🤝'],['Efectividad','✅'],['No efectivos','⚠️']];
+const azKpi=(lb,vl,ft,acc,bar)=>`<div class="card kpi" style="--accent:${acc||'#dbe7ff'}"><div class="ic">${(AZ_IC.find(x=>lb.startsWith(x[0]))||['','📊'])[1]}</div><div class="lb">${lb}</div><div class="vl">${vl}</div><div class="ft">${ft}</div>${bar||''}</div>`;
 function azVResumen(c){
   const b=azB(c,AZ.coord)||c.bloques[0];const t=azOv(c,b);const okN=azOkN(b);const esZ=b.n===AZ_ZONA;
   const pr=(r,m)=>m?azP((r||0)/m,1):'—';
@@ -2351,10 +2353,10 @@ ${fila('Diferencia en $',b.difD,x=>x==null?'—':`<span class="${x>=0?'az-pos':'
 }
 function azVCoord(c){
   const filas=c.bloques.map(b=>{const n=azOkN(b);
-    const cel=AZ_TR.map((_,i)=>{const r=b.real[i],p=b.pp[i];return `<td class="ctr" style="padding:5px 4px"><div class="az-hm ${p==null?'na':p>=0?'ok':'bad'}">${azP(r)}<small>${azPP(p)}</small></div></td>`;}).join('');
+    const cel=AZ_TR.map((_,i)=>{const r=b.real[i],p=b.pp[i];const al=p==null?0:(.10+Math.min(1,Math.abs(p)/.15)*.42).toFixed(2);return `<td class="h" style="background:${p==null?'#f1f5f9':p>=0?`rgba(22,163,74,${al})`:`rgba(220,38,38,${al})`}">${azP(r,1)}<div class="xs" style="font-weight:600;opacity:.75">${azPP(p)}</div></td>`;}).join('');
     return `<tr ${b.n===AZ_ZONA?'style="background:#f3f6fc"':''}><td class="cobn nowrap">${esc(azNom(b.n))}<div class="xs mut" style="font-weight:600">${azMM(b.saldo)}</div></td>${cel}<td class="ctr"><span class="az-tg ${azOkCls(n)}">${n}/${AZ_TR.length}</span></td></tr>`;}).join('');
   const mapa=`<div class="card"><h3>Comparativo por coordinación y tramo</h3><div class="sub">Contiene total real y diferencia frente a la meta acumulada · verde = sobre la meta · rojo = bajo la meta</div>
-<div class="tw"><table><thead><tr><th>Coordinación</th>${AZ_TR.map(x=>`<th class="ctr">${x}</th>`).join('')}<th class="ctr">OK</th></tr></thead><tbody>${filas}</tbody></table></div></div>`;
+<div class="tw hm"><table><thead><tr><th>Coordinación</th>${AZ_TR.map(x=>`<th class="ctr">${x}</th>`).join('')}<th class="ctr">OK</th></tr></thead><tbody>${filas}</tbody></table></div></div>`;
   const orden=azCoords(c).slice().sort((x,y)=>(azOkN(y)-azOkN(x))||((y.mejReal||0)-(x.mejReal||0)));
   const rk=orden.map((b,i)=>{const brecha=(b.difD||[]).slice(2).reduce((s,x)=>s+(typeof x==='number'&&x<0?x:0),0);const p=(c.palancas||[]).find(x=>x.n===b.n)||{};
     return `<tr><td class="cobn nowrap">${i+1}. ${esc(azNom(b.n))}</td><td class="ctr">${azOkN(b)}/${AZ_TR.length}</td><td class="num">${azP(b.mejReal)}</td><td class="num az-neg">${azM(brecha)}</td><td>${esc(p.foco||'—')}</td><td>${esc(p.alerta||'—')}</td><td>${esc(p.palanca||'—')}</td></tr>`;}).join('');
@@ -2391,9 +2393,9 @@ ${ta('plan','Plan de acción del coordinador',t.plan,6)}${ta('planTel','Plan de 
 function azVCC(c){
   const z=azB(c,AZ_ZONA)||c.bloques[0];const tx=azOv(c,z).telef||'';
   const k=[];let m;
-  if(m=tx.match(/Conectividad\s*([\d.,]+)\s*%\s*([\d.]+)\s*contactos/i))k.push(azKpi('Conectividad',m[1]+' %',m[2]+' contactos'));
-  if(m=tx.match(/Tasa\s+(?:de\s+)?compromisos\s*([\d.,]+)\s*%\s*([\d.]+)/i))k.push(azKpi('Tasa de compromisos',m[1]+' %',m[2]+' compromisos','#fef3c7'));
-  if(m=tx.match(/Efectividad\s+(?:de\s+)?compromisos\s*([\d.,]+)\s*%\s*([\d.]+)/i))k.push(azKpi('Efectividad',m[1]+' %',m[2]+' compromisos efectivos','#dcfce7'));
+  if(m=tx.match(/Conectividad\s*([\d.,]+)\s*%\s*([\d.]+)\s*contactos/i))k.push(azKpi('Conectividad',m[1]+'%',m[2]+' contactos'));
+  if(m=tx.match(/Tasa\s+(?:de\s+)?compromisos\s*([\d.,]+)\s*%\s*([\d.]+)/i))k.push(azKpi('Tasa de compromisos',m[1]+'%',m[2]+' compromisos','#fef3c7'));
+  if(m=tx.match(/Efectividad\s+(?:de\s+)?compromisos\s*([\d.,]+)\s*%\s*([\d.]+)/i))k.push(azKpi('Efectividad',m[1]+'%',m[2]+' compromisos efectivos','#dcfce7'));
   if(m=tx.match(/([\d.]+)\s+compromisos\s+no\s+efectivos/i))k.push(azKpi('No efectivos',m[1],'Oportunidad directa de recuperación','#fee2e2'));
   const kp=k.length?`<div class="grid g4" style="margin-bottom:14px">${k.join('')}</div>`:'';
   const ins=(c.insights||[]).length?c.insights.map(t=>`<div class="az-txt" style="padding:10px 0;border-bottom:1px solid #eef1f7;margin:0">${azT(t)}</div>`).join(''):'<div class="mut sm">El Excel no trae insights de Contact Center.</div>';
@@ -2412,7 +2414,7 @@ function azVTend(c){
   if(prev){
     const rows=[];azCoords(c).forEach(b=>{const p=azB(prev,b.n);if(!p)return;AZ_TR.forEach((t,j)=>{const a=p.pp[j],n=b.pp[j];if(typeof a==='number'&&typeof n==='number')rows.push({n:b.n,t,a,now:n,d:n-a});});});
     const sube=rows.filter(r=>r.d>0.00005).sort((x,y)=>y.d-x.d).slice(0,6),baja=rows.filter(r=>r.d<-0.00005).sort((x,y)=>x.d-y.d).slice(0,6);
-    const tb=(arr,cls,fl)=>arr.length?arr.map(r=>`<tr><td class="cobn nowrap">${esc(azNom(r.n))}</td><td class="ctr"><span class="badge c-${r.t}">${r.t}</span></td><td class="num">${azPP(r.a)}</td><td class="num">${azPP(r.now)}</td><td class="num"><span class="az-tg ${cls}">${fl} ${fmt(Math.abs(r.d)*100,2)} p.p.</span></td></tr>`).join(''):'<tr><td colspan="5" class="mut ctr">Sin movimientos</td></tr>';
+    const tb=(arr,cls,fl)=>arr.length?arr.map(r=>`<tr><td class="cobn nowrap">${esc(azNom(r.n))}</td><td class="ctr"><span class="badge c-${r.t}">${r.t}</span></td><td class="num">${azPP(r.a)}</td><td class="num">${azPP(r.now)}</td><td class="num"><span class="az-tg ${cls}">${fl} ${fmt(Math.abs(r.d)*100,2)} pp</span></td></tr>`).join(''):'<tr><td colspan="5" class="mut ctr">Sin movimientos</td></tr>';
     const hd='<thead><tr><th>Coordinación</th><th class="ctr">Tramo</th><th class="num">Antes</th><th class="num">Ahora</th><th class="num">Cambio</th></tr></thead>';
     const cnt=azCoords(c).map(b=>{const p=azB(prev,b.n);if(!p)return '';const d=azOkN(b)-azOkN(p);return `<tr><td class="cobn">${esc(azNom(b.n))}</td><td class="ctr">${azOkN(p)}/${AZ_TR.length}</td><td class="ctr">${azOkN(b)}/${AZ_TR.length}</td><td class="ctr">${d>0?`<span class="az-tg ok">▲ +${d}</span>`:d<0?`<span class="az-tg bad">▼ ${d}</span>`:'<span class="az-tg gr">= igual</span>'}</td></tr>`;}).join('');
     mov=`<div class="card" style="margin-top:14px"><h3>Quién sube y quién baja</h3><div class="sub">Cambio en la diferencia frente a la meta acumulada: corte ${azDMY(prev.fecha)} → corte ${azDMY(c.fecha)}</div>
