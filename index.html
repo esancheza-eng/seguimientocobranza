@@ -556,6 +556,9 @@ canvas{max-width:100%}
     </div>
   </div>
   <div class="card" style="margin-top:14px"><h3>Última actualización</h3><div id="estadoCargas" class="sm"></div></div>
+  <div class="card" style="margin-top:14px" id="cardMigFechas"><h3>🗓️ Corregir fechas del historial (una sola vez)</h3>
+    <div class="sm mut" style="margin-bottom:8px">Todo lo que subes es del día anterior, pero lo ya guardado quedó con la fecha en que lo subiste. Este botón mueve el historial un día atrás para que todo quede alineado: mora, cobro, fotos del listado y fotos de refinanciamientos de Zona Milagro. Antes descarga un respaldo. <b>Córrelo una sola vez y antes de tu próxima carga.</b></div>
+    <div id="migFechasEst" class="sm"></div></div>
 </section>
 
 <section class="sec" id="s-estrat">
@@ -695,6 +698,8 @@ const m0=n=>'$'+fmt(n,0);
 const pctTxt=(v,d=1)=>(v==null||isNaN(v))?'—':fmt(v*100,d)+'%';
 const pad=n=>String(n).padStart(2,'0');
 function hoyYMD(){const d=new Date();return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;}
+/* Todo lo que se sube es del día anterior: esa es la fecha por defecto de las cargas */
+function ayerYMD(){const d=new Date();d.setDate(d.getDate()-1);return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;}
 function ymdUTC(d){return d?`${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}`:'';}
 function dmy(s){if(!s)return '';const [y,m,d]=s.split('-');return `${d}/${m}/${y}`;}
 function diasMes(mes){const [y,m]=mes.split('-').map(Number);return new Date(y,m,0).getDate();}
@@ -1605,7 +1610,7 @@ function pintarFiltrosLs(nombre){const g=(k,t,lbl)=>{const vals=LS_F[k];const by
   $('lsFiltros').innerHTML=`<div class="okbox">📄 ${esc(nombre)} · ${fmt(LS_RAW.length,0)} filas de crédito</div>`+
     `<details style="margin-top:8px"><summary class="sm b" style="cursor:pointer;color:var(--navy)">⚙️ Filtros (por defecto: 2026 de mayo a ${MESES[new Date().getMonth()]}, A–E1, Origen: solo Refinanciamiento trx-393 y Facturación trx-142)</summary>`+
     g('fvi','📅 Fecha Vencimiento Inicial',ymLbl)+g('fvf','📅 Fecha Vencimiento Final',ymLbl)+g('cal','🏷️ Calificación Cliente Mensual')+g('ori','🧾 Origen Factura')+`</details>`+
-    `<div class="fld" style="margin-top:10px"><label>Fecha de la foto</label><input type="date" id="lsFecha" class="inp" value="${hoyYMD()}" max="${hoyYMD()}"></div><label class="sm" style="display:flex;gap:6px;align-items:center;margin-top:10px"><input type="checkbox" id="lsTambienRefi" checked> Tomar también los refinanciamientos de este archivo (todas las fechas)</label>`;
+    `<div class="fld" style="margin-top:10px"><label>Fecha de la foto <span class="xs mut">(por defecto, el día anterior)</span></label><input type="date" id="lsFecha" class="inp" value="${ayerYMD()}" max="${hoyYMD()}"></div><label class="sm" style="display:flex;gap:6px;align-items:center;margin-top:10px"><input type="checkbox" id="lsTambienRefi" checked> Tomar también los refinanciamientos de este archivo (todas las fechas)</label>`;
   $('lsFiltros').classList.remove('hidden');}
 function lsTog(k,el,v){const s=LS_F.sel[k];s.has(v)?s.delete(v):s.add(v);el.classList.toggle('on');procesarListado();}
 function lsAll(k){const s=LS_F.sel[k];if(s.size===LS_F[k].length)s.clear();else LS_F[k].forEach(v=>s.add(v));pintarFiltrosLs(document.querySelector('#lsFiltros .okbox')?.textContent.replace('📄 ','').split(' · ')[0]||'');procesarListado();}
@@ -1642,13 +1647,13 @@ function procesarListado(){
   $('lsRes').innerHTML=`<div class="info">${dupl?`⚠️ El archivo trae <b>${fmt(dupl,0)}</b> filas repetidas del mismo crédito; se cuentan una sola vez.<br>`:''}<b>${fmt(filas,0)}</b> créditos después de filtros → <b>${fmt(LS_OUT.clientes,0)}</b> clientes de ${COBS.length-faltan.size} cobradores · siembra 1-2-3: <b>${sie}</b>`+
     (presentes.length<COBS.length?`<br>ℹ️ El archivo trae solo ${presentes.length} cobrador(es): <b>${presentes.map(i=>COB_BY_ID[i].corto).join(', ')}</b>. Solo se actualizará su listado; los demás <b>se mantienen como están</b>.`:(faltan.size?`<br>⚠️ Sin filas después de filtros: ${[...faltan].map(i=>COB_BY_ID[i].corto).join(', ')}`:''))+`</div><button class="btn gold block" style="margin-top:10px" onclick="publicarListado(this)">🚀 Publicar listado en línea</button>`;
 }
-async function publicarListado(b){if(!LS_OUT)return;if(b)b.disabled=true;
+async function publicarListado(b){if(!LS_OUT)return;{const f0=$('lsFecha')?.value||ayerYMD();if((S.lsHist||[]).some(h=>h.id===f0)&&!confirm('Ya existe una foto del listado del '+dmy(f0)+'. ¿Reemplazarla con este archivo?'))return;}if(b)b.disabled=true;
   const tot0=LS_OUT.presentes.length*2+2;let hechos=0;const avance=t=>{if(b)b.innerHTML=`⏳ ${t} (${Math.min(99,Math.round(hechos/tot0*100))}%)`;};const paso=()=>{hechos++;avance('Publicando…');};avance('Publicando…');
   try{const ts=Date.now();
     const P=COBS.filter(c=>LS_OUT.presentes.includes(c.id));
     await Promise.all(P.map(c=>DB.set('listado/'+c.id,{cl:LS_OUT.porCob[c.id],ts,corte:LS_OUT.corte}).then(()=>{S.listado[c.id]={cl:LS_OUT.porCob[c.id],ts,corte:LS_OUT.corte};paso();})));
     const totCli=COBS.reduce((t,c)=>t+((S.listado[c.id]?.cl)||[]).length,0);
-    const fecha=$('lsFecha')?.value||hoyYMD();
+    const fecha=$('lsFecha')?.value||ayerYMD();
     const est={listado:{ts,fecha,filas:LS_OUT.filas,clientes:totCli,corte:LS_OUT.corte}};const prevRes=(S.lsHist.find(h=>h.id===fecha)||{}).cobs||{};const res={...prevRes};
     await Promise.all(P.map(c=>DB.set('listadohist/'+fecha+'__'+c.id,{cl:LS_OUT.porCob[c.id],fecha,cob:c.id,ts,corte:LS_OUT.corte}).then(paso)));
     for(const c of P){const a=LS_OUT.porCob[c.id];
@@ -1665,7 +1670,7 @@ async function publicarListado(b){if(!LS_OUT)return;if(b)b.disabled=true;
   }catch(e){console.error(e);toast('No se pudo publicar: '+e.message);if(b){b.disabled=false;b.innerHTML='🚀 Publicar listado en línea';}}}
 
 /* ---- 2. Refinanciamientos ---- */
-function extraerRefis(rows){const por={};const presentes=new Set();let n=0;const mesAct=hoyYMD().slice(0,7),hoyS=hoyYMD();
+function extraerRefis(rows){const por={};const presentes=new Set();let n=0;const mesAct=ayerYMD().slice(0,7),hoyS=ayerYMD();
   rows.forEach(r=>{const cob=cobDe(r['Nombre Cobrador Actual']);if(!cob)return;presentes.add(cob.id);
     const fc=parseDate(r['Fecha Credito']??r['Fecha Crédito']);const fcs=ymdUTC(fc);
     if(!fcs||fcs.slice(0,7)!==mesAct||fcs>hoyS)return; // 1) Fecha Crédito del mes en curso
@@ -1673,13 +1678,13 @@ function extraerRefis(rows){const por={};const presentes=new Set();let n=0;const
     (por[cob.id]=por[cob.id]||[]).push({cc:String(r['Cod Credito']||''),cod:String(r['Cod Cliente']||''),nom:String(r['Nombre Cliente']||'').trim(),ced:String(r['Nro Identificación']||''),
       fc:ymdUTC(fc),saldo:+num(r['Saldo Crédito Final']).toFixed(2),cal:normCalif(r['Calificación Cliente Mensual']),tienda:String(r['Tienda Factura']||'').trim(),linea:String(r['Línea Producto']||'').trim()});n++;});
   return {por,presentes,n};}
-async function guardarRefis(r,ts,fecha){fecha=fecha||hoyYMD();let nuevos=0,cancel=0;
+async function guardarRefis(r,ts,fecha){fecha=fecha||ayerYMD();let nuevos=0,cancel=0;
   await Promise.all([...r.presentes].map(async id=>{
     const prev=new Map((S.refis[id]||[]).map(x=>[x.cc,x]));const vistos=new Set();
     (r.por[id]||[]).forEach(x=>{vistos.add(x.cc);const o=prev.get(x.cc);
       if(o){prev.set(x.cc,{...o,...x,saldo:Math.max(+o.saldo||0,x.saldo),ult:x.saldo,cancel:false,visto:fecha});}
       else{prev.set(x.cc,{...x,ult:x.saldo,cancel:false,alta:fecha,visto:fecha});nuevos++;}});
-    const mesAct=hoyYMD().slice(0,7);prev.forEach((o,cc)=>{if(!vistos.has(cc)&&!o.cancel&&(o.fc||'').slice(0,7)===mesAct){prev.set(cc,{...o,cancel:true,ult:0,cancelFecha:fecha});cancel++;}});
+    const mesAct=fecha.slice(0,7);prev.forEach((o,cc)=>{if(!vistos.has(cc)&&!o.cancel&&(o.fc||'').slice(0,7)===mesAct){prev.set(cc,{...o,cancel:true,ult:0,cancelFecha:fecha});cancel++;}});
     const items=[...prev.values()];await DB.set('refis/'+id,{items,ts});S.refis[id]=items;}));
   // foto diaria de refinanciamientos del mes
   const mes=fecha.slice(0,7),[d1,d2]=rangoMes(mes),cobs={};
@@ -1693,9 +1698,9 @@ async function leerRefis(file){if(!file)return;$('rfRes').innerHTML='<div class=
     const lst=[...RF_TMP.presentes].map(id=>{const it=RF_TMP.por[id]||[];const mm=it.filter(x=>x.fc>=d1&&x.fc<=d2);return `<tr><td class="cobn">${esc(COB_BY_ID[id].corto)}</td><td class="num">${mm.length}</td><td class="num">${m$(mm.reduce((s,x)=>s+x.saldo,0))}</td></tr>`;}).join('');
     $('rfRes').innerHTML=`<div class="okbox">📄 ${esc(file.name)} · ${RF_TMP.presentes.size} cobrador(es) · se cuentan solo los de Fecha Crédito en ${mesNombre(S.mes)}</div>`+
       `<div class="tw" style="margin-top:8px;max-height:260px"><table><thead><tr><th>Cobrador</th><th class="num">Refis ${MESES[+S.mes.slice(5)-1]}</th><th class="num">Saldo Crédito Final</th></tr></thead><tbody>${lst||'<tr><td colspan="3" class="mut center">Ningún cobrador del equipo en el archivo</td></tr>'}</tbody></table></div>`+
-      (RF_TMP.presentes.size?`<div class="fld" style="margin-top:10px"><label>Fecha de la foto</label><input type="date" id="rfFechaCarga" class="inp" value="${hoyYMD()}" max="${hoyYMD()}"></div><div class="xs mut">Se acumulan: los refinanciamientos que ya estaban guardados no se borran aunque el crédito se cancele.</div><button class="btn gold block" style="margin-top:10px" onclick="publicarRefis(this)">🚀 Guardar refinanciamientos</button>`:'');
+      (RF_TMP.presentes.size?`<div class="fld" style="margin-top:10px"><label>Fecha de la foto <span class="xs mut">(por defecto, el día anterior)</span></label><input type="date" id="rfFechaCarga" class="inp" value="${ayerYMD()}" max="${hoyYMD()}"></div><div class="xs mut">Se acumulan: los refinanciamientos que ya estaban guardados no se borran aunque el crédito se cancele.</div><button class="btn gold block" style="margin-top:10px" onclick="publicarRefis(this)">🚀 Guardar refinanciamientos</button>`:'');
   }catch(e){console.error(e);$('rfRes').innerHTML=`<div class="info" style="background:#fee2e2;border-color:#fecaca;color:#7f1d1d">${esc(e.message)}</div>`;}}
-async function publicarRefis(b){b.disabled=true;try{const ts=Date.now();const rr=await guardarRefis(RF_TMP,ts,$('rfFechaCarga')?.value||hoyYMD());const est={refis:{ts,n:RF_TMP.n}};await DB.set('config/estado',est,true);Object.assign(S.estado,est);
+async function publicarRefis(b){{const f0=$('rfFechaCarga')?.value||ayerYMD();if((S.refisHist||[]).some(h=>h.id===f0)&&!confirm('Ya existe una foto de refinanciamientos del '+dmy(f0)+'. ¿Reemplazarla con este archivo?'))return;}b.disabled=true;try{const ts=Date.now();const rr=await guardarRefis(RF_TMP,ts,$('rfFechaCarga')?.value||ayerYMD());const est={refis:{ts,n:RF_TMP.n}};await DB.set('config/estado',est,true);Object.assign(S.estado,est);
   toast('✅ Refinanciamientos publicados');$('rfRes').innerHTML+=`<div class="okbox">✅ Guardado. ${rr.nuevos} refinanciamiento(s) nuevo(s)${rr.cancel?` · ${rr.cancel} ya no vienen en el archivo (cancelados) y se mantienen guardados`:''}.</div>`;renderEstado();}catch(e){console.error(e);toast('No se pudo publicar');b.disabled=false;}}
 
 /* ---- 3. Mora proyectada ---- */
@@ -1709,10 +1714,10 @@ async function leerMora(file){if(!file)return;$('moRes').innerHTML='<div class="
     if(!filas.length)throw new Error('El archivo no tiene cobradores del equipo.');
     MO_TMP=filas;const z=moraZona({filas});const nC=new Set(filas.map(f=>f.cob)).size;
     $('moRes').innerHTML=`<div class="okbox">📄 ${esc(file.name)} · ${nC} cobradores del equipo · ${filas.length} filas<br>Zona: Libera <b>${pctTxt(z.pl,2)}</b> · Contiene <b>${pctTxt(z.pc,2)}</b> · Contiene total <b>${pctTxt(z.pct,2)}</b></div>`+
-      `<div class="fld" style="margin-top:10px"><label>Fecha del corte</label><input type="date" id="moFechaCarga" class="inp" value="${hoyYMD()}" max="${hoyYMD()}"></div>`+
+      `<div class="fld" style="margin-top:10px"><label>Fecha del corte <span class="xs mut">(por defecto, el día anterior)</span></label><input type="date" id="moFechaCarga" class="inp" value="${ayerYMD()}" max="${hoyYMD()}"></div>`+
       `<button class="btn gold block" onclick="publicarMora(this)">🚀 Guardar corte del día</button>`;
   }catch(e){console.error(e);$('moRes').innerHTML=`<div class="info" style="background:#fee2e2;border-color:#fecaca;color:#7f1d1d">${esc(e.message)}</div>`;}}
-async function publicarMora(b){const f=$('moFechaCarga').value;if(!f)return toast('Elige la fecha');b.disabled=true;
+async function publicarMora(b){const f=$('moFechaCarga').value;if(!f)return toast('Elige la fecha');if(S.mora.some(x=>x.id===f)&&!confirm('Ya existe un corte de mora del '+dmy(f)+'. ¿Reemplazarlo con este archivo?'))return;b.disabled=true;
   try{await DB.set('mora/'+f,{filas:MO_TMP,ts:Date.now()});
     for(const c of COBS){const mine=MO_TMP.filter(x=>x.cob===c.id);if(!mine.length)continue;const d=await DB.get('moracob/'+c.id);const dias=(d&&d.dias)||{};dias[f]=mine;await DB.set('moracob/'+c.id,{dias});}
     const i=S.mora.findIndex(s=>s.id===f);const doc={id:f,filas:MO_TMP};if(i>=0)S.mora[i]=doc;else S.mora.push(doc);S.mora.sort((a,b)=>a.id.localeCompare(b.id));
@@ -1733,10 +1738,10 @@ async function leerCobro(file){if(!file)return;$('ceRes').innerHTML='<div class=
     if(!filas.length)throw new Error('El archivo no tiene cobradores del equipo.');
     CE_TMP=filas;const tot=filas.reduce((a,f)=>a+f.t,0);
     $('ceRes').innerHTML=`<div class="okbox">📄 ${esc(file.name)} · ${filas.length} cobradores del equipo · total <b>${m$(tot)}</b>${fuera.length?`<br><span class="xs">No son del equipo (se ignoran): ${fuera.map(esc).join(', ')}</span>`:''}</div>`+
-      `<div class="fld" style="margin-top:10px"><label>Fecha del corte</label><input type="date" id="ceFechaCarga" class="inp" value="${hoyYMD()}" max="${hoyYMD()}"></div>`+
+      `<div class="fld" style="margin-top:10px"><label>Fecha del corte <span class="xs mut">(por defecto, el día anterior)</span></label><input type="date" id="ceFechaCarga" class="inp" value="${ayerYMD()}" max="${hoyYMD()}"></div>`+
       `<button class="btn gold block" onclick="publicarCobro(this)">🚀 Guardar corte del día</button>`;
   }catch(e){console.error(e);$('ceRes').innerHTML=`<div class="info" style="background:#fee2e2;border-color:#fecaca;color:#7f1d1d">${esc(e.message)}</div>`;}}
-async function publicarCobro(b){const f=$('ceFechaCarga').value;if(!f)return toast('Elige la fecha');b.disabled=true;
+async function publicarCobro(b){const f=$('ceFechaCarga').value;if(!f)return toast('Elige la fecha');if(S.cobro.some(x=>x.id===f)&&!confirm('Ya existe un corte de cobro del '+dmy(f)+'. ¿Reemplazarlo con este archivo?'))return;b.disabled=true;
   try{await DB.set('cobro/'+f,{filas:CE_TMP,ts:Date.now()});
     for(const c of COBS){const mine=CE_TMP.find(x=>x.cob===c.id);if(!mine)continue;const d=await DB.get('cobrocob/'+c.id);const dias=(d&&d.dias)||{};dias[f]=mine;await DB.set('cobrocob/'+c.id,{dias});}
     const i=S.cobro.findIndex(s=>s.id===f);const doc={id:f,filas:CE_TMP};if(i>=0)S.cobro[i]=doc;else S.cobro.push(doc);S.cobro.sort((a,b)=>a.id.localeCompare(b.id));
@@ -1877,7 +1882,60 @@ async function renderComp(){
 }
 function exportComp(){const E={ok:'Cumplido',no:'Incumplido',pend:'Por vencer',sd:'Sin comparación'};xlsxDownload(_cpRows.map(v=>({'Fecha compromiso':dmy(v.comp),Cobrador:COB_BY_ID[v.cob].corto,'Cod cliente':v.cli,Cliente:v.nom,'Fecha gestión':dmy(v.ts.slice(0,10))+' '+v.ts.slice(11),'Observación':v.obs,'Rodam. antes':v.antes?.cr||'','Rodam. ahora':v.ahora?.cr||'','Cuota vencida antes':v.antes?.cv??'','Cuota vencida ahora':v.ahora?.cv??'',Estado:E[v.est],Evidencia:v.ev||''})),`Compromisos_${S.mes}.xlsx`,'Compromisos');}
 
-function renderEstado(){const e=S.estado||{};const l=x=>x?new Date(x).toLocaleString('es-EC'):'—';
+/* ---- Corrida única: mover el historial de Zona Milagro un día atrás ---- */
+function diaMenos(f){const d=new Date(f+'T12:00:00');d.setDate(d.getDate()-1);return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;}
+const esYMD=f=>/^\d{4}-\d{2}-\d{2}$/.test(f||'');
+async function pintarMigFechas(){const el=$('migFechasEst');if(!el)return;
+  if(S.migFechas===undefined){try{S.migFechas=await DB.get('config/migracion_fechas');}catch(e){S.migFechas=null;}}
+  el.innerHTML=S.migFechas&&S.migFechas.fin?`<div class="okbox">✅ Ya se corrigió el ${new Date(S.migFechas.fin).toLocaleString('es-EC')}. No hay que volver a correrlo.</div>`:`<button class="btn gold" onclick="migrarFechas(this)">🗓️ Mover el historial un día atrás</button>`;}
+async function migrarFechas(b){
+  const txt0=b.innerHTML,fin=()=>{b.disabled=false;b.innerHTML=txt0;};
+  try{
+    const ya=await DB.get('config/migracion_fechas');
+    if(ya&&ya.fin){S.migFechas=ya;toast('Esto ya se hizo el '+new Date(ya.fin).toLocaleString('es-EC'),5000);return pintarMigFechas();}
+    b.disabled=true;b.innerHTML='⏳ Leyendo el historial…';
+    const nombres=['mora','cobro','listadoresumen','refishist','moracob','cobrocob'];
+    const [mo,ce,lr,rh,mc,cc]=await Promise.all(nombres.map(c=>DB.list(c)));
+    const est=await DB.get('config/estado');
+    const porFecha=a=>a.filter(x=>esYMD(x.id)&&!x.mig).sort((x,y)=>x.id.localeCompare(y.id));
+    const pend={mora:porFecha(mo),cobro:porFecha(ce),listadoresumen:porFecha(lr),refishist:porFecha(rh)};
+    const pendCob=a=>a.filter(x=>!x.mig&&x.dias&&Object.keys(x.dias).length);
+    const pmc=pendCob(mc),pcc=pendCob(cc);
+    const fechasLh=pend.listadoresumen.map(x=>x.id);
+    const total=pend.mora.length+pend.cobro.length+pend.listadoresumen.length+pend.refishist.length+pmc.length+pcc.length+fechasLh.length*COBS.length;
+    if(!total){fin();return toast('No encontré historial pendiente de mover');}
+    if(!confirm(`Voy a mover un día atrás estas fechas:\n\n• Cortes de mora: ${pend.mora.length}\n• Cortes de cobro: ${pend.cobro.length}\n• Fotos del listado: ${fechasLh.length}\n• Fotos de refinanciamientos: ${pend.refishist.length}\n• Mora y cobro por cobrador: ${pmc.length+pcc.length}\n\nPrimero se descarga un respaldo. Hazlo UNA sola vez y sin otra pestaña abierta. ¿Continuar?`)){fin();return;}
+    // respaldo (sin las fotos completas del listado, que son muy grandes)
+    const resp={generado:new Date().toISOString(),por:S.email||'',mora:mo,cobro:ce,listadoresumen:lr,refishist:rh,moracob:mc,cobrocob:cc,estado:est};
+    const bl=new Blob([JSON.stringify(resp)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(bl);a.download='Respaldo_antes_de_mover_fechas_'+hoyYMD()+'.json';document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1500);
+    let hechos=0,errores=0;const prog=()=>{b.innerHTML=`⏳ Moviendo historial… ${Math.min(99,Math.round(hechos/total*100))}%`;};prog();
+    const lote=async(arr,fn,n=5)=>{for(let i=0;i<arr.length;i+=n){await Promise.all(arr.slice(i,i+n).map(async x=>{try{await fn(x);}catch(e){console.error(e);errores++;}hechos++;}));prog();}};
+    // docs cuyo id es la fecha: se escribe el nuevo, se verifica y recién ahí se borra el viejo (de la más antigua a la más reciente)
+    const mover=async(col,docs,extra)=>{for(const d of docs){const f=d.id,f1=diaMenos(f);
+      try{const ex=await DB.get(col+'/'+f1);if(ex&&!ex.mig){errores++;hechos++;console.error('destino ocupado',col,f1);continue;}
+        const o={...d};delete o.id;o.mig=1;if('fecha' in o)o.fecha=f1;if(extra)extra(o,f1);
+        await DB.set(col+'/'+f1,o);await DB.del(col+'/'+f);}catch(e){console.error(e);errores++;}hechos++;prog();}};
+    // 1) fotos completas del listado (id = fecha__cobrador)
+    for(const f of fechasLh){const f1=diaMenos(f);await lote(COBS,async c=>{const src=await DB.get('listadohist/'+f+'__'+c.id);if(!src||src.mig)return;
+      const ex=await DB.get('listadohist/'+f1+'__'+c.id);if(ex&&!ex.mig){errores++;return;}
+      const o={...src};delete o.id;o.mig=1;o.fecha=f1;await DB.set('listadohist/'+f1+'__'+c.id,o);await DB.del('listadohist/'+f+'__'+c.id);});}
+    // 2) resto de colecciones por fecha
+    await mover('listadoresumen',pend.listadoresumen);
+    await mover('mora',pend.mora);
+    await mover('cobro',pend.cobro);
+    await mover('refishist',pend.refishist,(o,f1)=>{o.mes=f1.slice(0,7);});
+    // 3) mora y cobro por cobrador (mapa de días dentro de un solo documento)
+    const rekey=async(col,docs)=>{await lote(docs,async d=>{const nd={};Object.keys(d.dias).forEach(k=>{nd[esYMD(k)?diaMenos(k):k]=d.dias[k];});const o={...d};delete o.id;o.dias=nd;o.mig=1;await DB.set(col+'/'+d.id,o);});};
+    await rekey('moracob',pmc);await rekey('cobrocob',pcc);
+    // 4) estado de cargas
+    try{const e2={};if(est&&est.listado&&esYMD(est.listado.fecha))e2.listado={...est.listado,fecha:diaMenos(est.listado.fecha)};if(est&&est.mora&&esYMD(est.mora.ultima))e2.mora={...est.mora,ultima:diaMenos(est.mora.ultima)};
+      if(Object.keys(e2).length)await DB.set('config/estado',e2,true);}catch(e){console.error(e);errores++;}
+    if(errores){b.innerHTML='⚠️ Terminó con '+errores+' aviso(s)';toast('Terminó con '+errores+' aviso(s). Guarda el respaldo y avísame; no vuelvas a correrlo todavía.',9000);return;}
+    const m={fin:Date.now(),email:S.email||'',movidos:total};await DB.set('config/migracion_fechas',m);S.migFechas=m;
+    b.innerHTML='✅ Listo';toast('✅ Historial movido un día atrás. Recargando…',4000);setTimeout(()=>location.reload(),2200);
+  }catch(e){console.error(e);toast('No se pudo completar: '+(e.code||e.message),7000);fin();}
+}
+function renderEstado(){pintarMigFechas();const e=S.estado||{};const l=x=>x?new Date(x).toLocaleString('es-EC'):'—';
   $('estadoCargas').innerHTML=`<div class="sumrow" style="margin:0"><div class="s">📋 Listado<b>${e.listado?fmt(e.listado.clientes,0)+' clientes':'—'}</b>${l(e.listado?.ts)}</div><div class="s">🔁 Refinanciamientos de ${MESES[+S.mes.slice(5)-1]}<b>${(()=>{const [d1,d2]=rangoMes(S.mes);let n=0,m=0;COBS.forEach(c=>refisDe(c.id,d1,d2).forEach(x=>{n++;m+=+x.saldo||0;}));return n+' créditos · '+m0(m);})()}</b>${l(e.refis?.ts)}</div><div class="s">📈 Mora proyectada<b>${S.mora.length} corte(s)</b>${S.mora.length?'último '+dmy(S.mora[S.mora.length-1].id):'—'}</div><div class="s">📝 Gestiones<b>${(()=>{let v=0;Object.values(S.gest||{}).forEach(a=>v+=a.length);return fmt(v,0)+' visitas';})()}</b>${mesNombre(S.mes)}</div><div class="s">💵 Cobro efectivo<b>${(()=>{const u=cobroUlt(S.mes);return u?m0(u.filas.reduce((t,f)=>t+f.t,0)):'—';})()}</b>${S.cobro.length?'último '+dmy(S.cobro[S.cobro.length-1].id):'—'}</div></div>`;}
 
 /* =====================================================================
@@ -2065,9 +2123,12 @@ async function cambiarFechaReg(){const f=$('rgFecha').value,h=hoyYMD();quitarCli
   const info=$('rgFecInfo');
   if(!f||f>=h){info.innerHTML='Si el retiro fue otro día, cambia primero la fecha: se buscará en el listado de ese día.';return;}
   info.innerHTML='⏳ Buscando el listado del '+dmy(f)+'…';
-  try{const d=await DB.get('listadohist/'+f+'__'+S.cob);
+  try{/* el listado que se sube cada mañana trae los datos del día anterior y se guarda con esa fecha: el cliente que se retiró el día f sigue en el listado del día f-1 */
+    const dd=new Date(f+'T12:00:00');dd.setDate(dd.getDate()-1);const f1=`${dd.getFullYear()}-${pad(dd.getMonth()+1)}-${pad(dd.getDate())}`;
+    let d=await DB.get('listadohist/'+f1+'__'+S.cob),usada=f1;
+    if(!(d&&d.cl&&d.cl.length)){d=await DB.get('listadohist/'+f+'__'+S.cob);usada=f;}
     if($('rgFecha').value!==f)return;
-    if(d&&d.cl&&d.cl.length){LS_DIA={fecha:f,cl:d.cl};info.innerHTML=`<b style="color:#92400e">📋 Buscando en tu listado del ${dmy(f)}</b> (${d.cl.length} clientes)`;}
+    if(d&&d.cl&&d.cl.length){LS_DIA={fecha:f,usada,cl:d.cl};info.innerHTML=`<b style="color:#92400e">📋 Buscando en tu listado del ${dmy(usada)}</b> (${d.cl.length} clientes)`;}
     else info.innerHTML=`⚠️ No hay listado guardado del ${dmy(f)}; se busca en el de hoy.`;}
   catch(e){info.innerHTML=`⚠️ No se pudo abrir el listado del ${dmy(f)}; se busca en el de hoy.`;}
   if($('rgCliQ').value.trim())buscarCli();}
@@ -2076,7 +2137,7 @@ function buscarCli(){const q=$('rgCliQ').value.trim().toUpperCase();
   if(!cl.length){$('rgCliRes').innerHTML='<div class="xs mut" style="margin-top:6px">Tu supervisor aún no publica tu listado de clientes.</div>';return;}
   const r=cl.filter(x=>!q||x.nom.toUpperCase().includes(q)||String(x.ced).includes(q)).sort((a,b)=>b.sc-a.sc);
   $('rgCliRes').innerHTML=r.length?`<div class="xs mut" style="margin:6px 0 2px">${q?r.length+' coincidencia(s)':'Tus '+cl.length+' clientes · toca uno o escribe para filtrar'}</div><div class="cli-res">${r.slice(0,60).map(x=>`<div onclick="elegirCli('${String(x.cod??'').replace(/[^\w.-]/g,'')}')"><b>${esc(x.nom)}</b><div style="margin:3px 0">${calInfo(x)}</div><div class="xs mut">${esc(x.ced)} · ${x.nc} crédito(s) · saldo ${m$(x.sc)} · vencido ${m$(x.cv)}</div></div>`).join('')}</div>`
-    :`<div class="xs mut" style="margin-top:6px">⚠️ Ese cliente no está en tu listado ${LS_DIA.cl?'del '+dmy(LS_DIA.fecha):'de hoy'}. Si el retiro fue otro día, cambia primero la fecha.</div>`;}
+    :`<div class="xs mut" style="margin-top:6px">⚠️ Ese cliente no está en tu listado ${LS_DIA.cl?'del '+dmy(LS_DIA.usada||LS_DIA.fecha):'de hoy'}. Si el retiro fue otro día, cambia primero la fecha.</div>`;}
 function elegirCli(cod){const x=cliBase().find(y=>y.cod===cod);if(!x)return;
   const creds=x.creds||[];
   cliSel={cod:x.cod,nom:x.nom,ced:x.ced,cm:x.cm,cr:x.cr,rod:x.rod,creds,sel:new Set(creds.length===1?[0]:[])};
@@ -2491,7 +2552,7 @@ function azParseDiario(wb,fname){
 }
 function azBaseDiario(fecha){const ks=azCuts();if(!ks.length)return null;const ant=ks.filter(k=>k<='c'+fecha);return AZ.doc.cortes[ant.length?ant[ant.length-1]:ks[0]];}
 function azMapDiario(arr){
-  const base=azBaseDiario(hoyYMD());const coords=base?azCoords(base).map(b=>b.n):['MACHALA','CUENCA/LOJA','MILAGRO','QUEVEDO'];
+  const base=azBaseDiario(ayerYMD());const coords=base?azCoords(base).map(b=>b.n):['MACHALA','CUENCA/LOJA','MILAGRO','QUEVEDO'];
   const map=AZ.doc.coordMap||{};const usados=new Set();
   arr.forEach(f=>{const n=map[azId(f.coordinador)];if(n&&coords.includes(n)&&!usados.has(n)){f.n=n;usados.add(n);}});
   if(base)arr.filter(f=>!f.n).forEach(f=>{let best=null,bd=Infinity;coords.forEach(n=>{if(usados.has(n))return;const b=azB(base,n);const d=Math.abs((b&&b.saldo||0)-f.si);if(d<bd){bd=d;best=n;}});if(best){f.n=best;f.auto=true;usados.add(best);}});
@@ -2502,7 +2563,7 @@ async function azLeerDiario(files){
   if(!window.XLSX){AZ.tmpDErr='No se pudo cargar el lector de Excel. Revisa tu conexión.';return azRender();}
   try{
     const arr=[];for(const f of files){const b=await f.arrayBuffer();arr.push(azParseDiario(XLSX.read(new Uint8Array(b),{type:'array'}),f.name));}
-    const coords=azMapDiario(arr);AZ.tmpD={files:arr,coords,fecha:hoyYMD()};
+    const coords=azMapDiario(arr);AZ.tmpD={files:arr,coords,fecha:ayerYMD()};
   }catch(e){console.error(e);AZ.tmpDErr=e.message||'No se pudieron leer los archivos.';}
   azRender();
 }
@@ -2618,7 +2679,7 @@ async function azLeerEnt(files){
   if(!window.XLSX){AZ.tmpEErr='No se pudo cargar el lector de Excel. Revisa tu conexión.';return azRender();}
   try{const c=azCut();const coords=c?azCoords(c).map(b=>b.n):AZ_COORDS_DEF.slice();const arr=[];
     for(const f of files){const b=await f.arrayBuffer();const p=azParseEnt(XLSX.read(new Uint8Array(b),{type:'array'}),f.name);azMapEnt(p,coords);arr.push(p);}
-    AZ.tmpE={files:arr,coords,fecha:hoyYMD()};
+    AZ.tmpE={files:arr,coords,fecha:ayerYMD()};
   }catch(e){console.error(e);AZ.tmpEErr=e.message||'No se pudieron leer los archivos.';}
   azRender();
 }
@@ -2812,7 +2873,7 @@ function azLsProc(rows){
     out.push({cod:c.cod,nom:c.nom,ced:c.ced,tel:c.tel,dir:c.dir,zona:c.zona,cob:c.cob,cobN:c.cobN,cm:c.cm,cd:c.cd,dias,cr,fvi:ymdUTC(c.minI),fvf:ymdUTC(c.minF),cv:+cv.toFixed(2),sc:+sc.toFixed(2),vc:+vc.toFixed(2),nro:nro||0,sie,rod:catRod(c.cm,cr),nc:c.rows.length,ref});});
   return {cl:out,filas:filas-dupl,dupl};
 }
-function azRfExtraer(rows){const mesAct=hoyYMD().slice(0,7),hoyS=hoyYMD(),out=[];
+function azRfExtraer(rows){const mesAct=ayerYMD().slice(0,7),hoyS=ayerYMD(),out=[];
   rows.forEach(r=>{const cobN=azStr(r['Nombre Cobrador Actual']).replace(/\s+/g,' ');if(!cobN)return;const fcs=ymdUTC(parseDate(r['Fecha Credito']??r['Fecha Crédito']));
     if(!fcs||fcs.slice(0,7)!==mesAct||fcs>hoyS)return;if(!/trx-393|refinanc/i.test(azStr(r['Origen Factura'])))return;
     out.push({cc:azStr(r['Cod Credito']),cod:azStr(r['Cod Cliente']),nom:azStr(r['Nombre Cliente']),ced:azStr(r['Nro Identificación']),fc:fcs,saldo:+num(r['Saldo Crédito Final']).toFixed(2),cal:normCalif(r['Calificación Cliente Mensual']),tienda:azStr(r['Tienda Factura']),linea:azStr(r['Línea Producto']),cobK:azEK(cobN),cobN});});
@@ -2826,7 +2887,7 @@ async function azLeerLs(files){
       const coordinador=azCoordDeTexto(aoa);const best=AZ_COORD_DE[azEK(coordinador)]||Object.keys(votos).sort((a,b)=>votos[b]-votos[a])[0]||'';
       const p=azLsProc(rows),rf=azRfExtraer(rows);
       arr.push({archivo:f.name,coordinador,fijo:!!AZ_COORD_DE[azEK(coordinador)],n:best,filasRaw:rows.length,cl:p.cl,filas:p.filas,dupl:p.dupl,rf,cobs:new Set(rows.map(r=>azEK(azStr(r['Nombre Cobrador Actual']))).filter(Boolean))});}
-    AZ.tmpL={files:arr,fecha:hoyYMD()};
+    AZ.tmpL={files:arr,fecha:ayerYMD()};
   }catch(e){console.error(e);AZ.tmpLErr=e.message||'No se pudieron leer los archivos.';}
   AZ.lsBusy='';azRender();
 }
@@ -2834,8 +2895,8 @@ function azLsResumen(a){return {n:a.length,sc:+a.reduce((t,x)=>t+x.sc,0).toFixed
 async function azPublicarLs(b){
   const d=AZ.tmpL;if(!d)return;if(d.files.some(f=>!f.n))return toast('Elige la coordinación de cada archivo');
   const ns=d.files.map(f=>f.n);if(new Set(ns).size!==ns.length)return toast('Hay dos archivos con la misma coordinación');
-  const fecha=d.fecha||hoyYMD();if(b)b.disabled=true;const paso=t=>{if(b)b.innerHTML='⏳ '+t;};
-  try{await azLsIdxLoad();const mes=hoyYMD().slice(0,7);if(AZ.rfMes!==mes||!AZ.rf)await azRfLoad(mes);const ts=Date.now();
+  const fecha=d.fecha||ayerYMD();if(b)b.disabled=true;const paso=t=>{if(b)b.innerHTML='⏳ '+t;};
+  try{await azLsIdxLoad();const mes=fecha.slice(0,7);if(AZ.rfMes!==mes||!AZ.rf)await azRfLoad(mes);const ts=Date.now();
     for(const f of d.files){paso('Publicando '+azNom(f.n)+'…');
       const por={};f.cl.forEach(x=>{(por[x.cob]=por[x.cob]||[]).push(x);});const cobs={};
       for(const k of Object.keys(por)){const a=por[k].map(x=>{const y={...x};delete y.cob;delete y.cobN;return y;});const partes=[];let cur=[],sz=0;
@@ -2861,7 +2922,7 @@ function azPrevLs(){
   const rows=d.files.map((f,i)=>`<tr><td class="xs"><b>${esc(f.coordinador||f.archivo)}</b><div class="mut">${esc(f.archivo)} · ${fmt(f.filasRaw,0)} filas · ${f.cobs.size} cobradores</div></td><td><select class="inp" style="padding:5px 8px;font-size:12.5px" onchange="AZ.tmpL.files[${i}].n=this.value"><option value="">— elegir —</option>${AZ_COORDS_DEF.map(n=>`<option value="${esc(n)}" ${n===f.n?'selected':''}>${esc(azNom(n))}</option>`).join('')}</select></td><td class="num">${fmt(f.cl.length,0)}</td><td class="num">${m0(f.cl.reduce((t,x)=>t+x.sc,0))}</td><td class="num">${f.rf.length}</td><td class="num">${m0(f.rf.reduce((t,x)=>t+x.saldo,0))}</td></tr>`).join('');
   return `<div class="okbox" style="background:#fff"><div class="tw"><table><thead><tr><th>Archivo</th><th>Coordinación</th><th class="num">Clientes</th><th class="num">Saldo crédito</th><th class="num">Refis del mes</th><th class="num">Monto refis</th></tr></thead><tbody>${rows}</tbody></table></div>
 <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="az-lbl" style="margin:0">Fecha de la foto</span><input type="date" class="inp" style="width:auto;padding:7px 10px" value="${esc(d.fecha||'')}" max="${hoyYMD()}" onchange="AZ.tmpL.fecha=this.value"></div></div>
-<div class="warnbox">Listado: mismas reglas de tu panel (vencimientos de mayo a ${MESES[new Date().getMonth()]} ${new Date().getFullYear()}, calificación A a E1, origen trx-393 y trx-142, agrupado por cliente). Refinanciamientos: Fecha Crédito de ${mesNombre(hoyYMD().slice(0,7))} y origen Refinanciamiento. Se guardan cédula, teléfono y dirección de los clientes.</div>
+<div class="warnbox">Listado: mismas reglas de tu panel (vencimientos de mayo a ${MESES[new Date().getMonth()]} ${new Date().getFullYear()}, calificación A a E1, origen trx-393 y trx-142, agrupado por cliente). Refinanciamientos: Fecha Crédito de ${mesNombre(ayerYMD().slice(0,7))} y origen Refinanciamiento. Se guardan cédula, teléfono y dirección de los clientes.</div>
 <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn gold" onclick="azPublicarLs(this)">🚀 Publicar listado en línea</button><button class="btn ghost" onclick="AZ.tmpL=null;azRender()">Cancelar</button></div>`;
 }
 const azSelC=(val,fn,todas)=>`<span class="lb">Coordinación</span><select class="inp" onchange="${fn}(this.value)">${todas?`<option value="">Zona Austro (todas)</option>`:''}${AZ_COORDS_DEF.map(n=>`<option value="${esc(n)}" ${n===val?'selected':''}>${esc(azNom(n))}</option>`).join('')}</select>`;
