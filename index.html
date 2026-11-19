@@ -2176,7 +2176,7 @@ function svInsData(){
   const z=ult?moraZona(ult):null;
   return {rows,ritmo,z,mL:sw?sl/sw:null,mC:sw?sc/sw:null,pRet:rm?ret/rm:null,pRefi:fm?refi/fm:null,corte:ult?ult.id:null};
 }
-function svInsTramo(ins){try{ins.pul=pulsoCalc(S.moraCob,S.mes,'__ALL','L');}catch(e){ins.pul=null;}}
+function svInsTramo(ins){try{ins.pul=pulsoCalc(S.moraCob,S.mes,'__ALL','L');}catch(e){ins.pul=null;}try{ins.pulC=pulsoCalc(S.moraCob,S.mes,'__ALL','C');}catch(e){ins.pulC=null;}}
 function svInsRender(ins){
   let box=$('svInsight');
   if(!box){box=document.createElement('div');box.id='svInsight';$('c-inicio').appendChild(box);}
@@ -2189,8 +2189,9 @@ function svInsRender(ins){
   const bloque=(tit,k,ref)=>`<div style="margin-top:14px;padding-top:10px;border-top:2px solid #eef1f7"><div class="b" style="color:var(--navy);font-size:15px">${tit}</div><div class="xs mut">${ref}</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px;margin-top:6px"><div><div class="xs b" style="color:#991b1b">🔻 MÁS BAJOS</div>${lst(k,rank(k,true),false)}</div><div><div class="xs b" style="color:#166534">🏆 TOP</div>${lst(k,rank(k,false),true)}</div></div></div>`;
   const zl=z?pctTxt(z.pl,2):'—',zc=z?pctTxt(z.pct,2):'—';
-  const kp=(t,v,s)=>`<div style="background:#f4f7fc;border-radius:12px;padding:10px 12px"><div class="xs mut">${t}</div><div style="font:800 22px Montserrat,Inter,sans-serif;color:var(--navy)">${v}</div><div class="xs mut">${s}</div></div>`;
-  const kpis=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:10px 0 0">${kp('Libera zona',zl,'meta '+(ins.mL!=null?pctTxt(ins.mL,2):'—'))}${kp('Contiene total zona',zc,'meta '+(ins.mC!=null?pctTxt(ins.mC,2):'—'))}${kp('Retiros',ins.pRet!=null?pctTxt(ins.pRet,0):'—','de la meta · ritmo '+pctTxt(rit,0))}${kp('Refinanc.',ins.pRefi!=null?pctTxt(ins.pRefi,0):'—','de la meta · ritmo '+pctTxt(rit,0))}</div>`;
+  const pjH=(P0)=>{if(!P0||!P0.pj)return '';const c={ok:['#ecfdf3','#166534'],warn:['#fffbeb','#92400e'],bad:['#fef2f2','#991b1b']}[P0.pj.sem]||['#f1f5f9','#334155'];return `<div style="margin-top:6px;background:${c[0]};color:${c[1]};border-radius:8px;padding:5px 8px"><div class="xs b">🔮 PROYECCIÓN AL CIERRE</div><div style="font:800 18px Montserrat,Inter,sans-serif">${pctTxt(P0.pj.prob,1)}</div><div class="xs">entre ${pctTxt(P0.pj.low,0)} y ${pctTxt(P0.pj.high,0)} · ${TEND[P0.pj.tend]}</div></div>`;};
+  const kp=(t,v,s,pj)=>`<div style="background:#f4f7fc;border-radius:12px;padding:10px 12px"><div class="xs mut">${t}</div><div style="font:800 22px Montserrat,Inter,sans-serif;color:var(--navy)">${v}</div><div class="xs mut">${s}</div>${pj||''}</div>`;
+  const kpis=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:10px 0 0">${kp('Libera zona',zl,'meta '+(ins.mL!=null?pctTxt(ins.mL,2):'—'),pjH(ins.pul))}${kp('Contiene total zona',zc,'meta '+(ins.mC!=null?pctTxt(ins.mC,2):'—'),pjH(ins.pulC))}${kp('Retiros',ins.pRet!=null?pctTxt(ins.pRet,0):'—','de la meta · ritmo '+pctTxt(rit,0))}${kp('Refinanc.',ins.pRefi!=null?pctTxt(ins.pRefi,0):'—','de la meta · ritmo '+pctTxt(rit,0))}</div>`;
   const P=ins.pul;let tramo='<div class="xs mut">Sin datos de mora para calcular tramos.</div>',foco='';
   if(P&&P.tramos&&P.tramos.length){
     const chip=(bg,fg,t)=>`<span style="display:inline-block;padding:6px 10px;border-radius:10px;font-size:13px;font-weight:700;margin:0 6px 6px 0;background:${bg};color:${fg}">${t}</span>`;
