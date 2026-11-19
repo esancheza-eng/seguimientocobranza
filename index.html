@@ -583,6 +583,7 @@ canvas{max-width:100%}
 
 <!-- ======== COBRADOR ======== -->
 <section class="sec" id="c-inicio">
+  <div id="svBar" class="hidden"></div>
   <div id="cAlerta"></div>
   <div class="card" id="cMetaMora" style="margin-bottom:14px;border-left:5px solid var(--purple)"></div>
   <div class="card" id="cPulso" style="margin-bottom:14px;border-left:5px solid #2563eb"></div>
@@ -876,14 +877,14 @@ function boot(){
 /* =====================================================================
    NAVEGACIÓN
    ===================================================================== */
-const TABS_SUP=[['s-resumen','📊 Resumen'],['s-metas','🎯 Metas y semanas'],['s-retiros','💸 Retiros'],['s-refis','🔁 Refinanciamientos'],['s-mora','📈 Mora proyectada'],['s-cobro','💵 Cobro efectivo'],['s-gest','📝 Gestiones'],['s-listado','📋 Listado'],['s-registros','🧾 Registros'],['s-cargar','⬆️ Cargar datos'],['s-equipo','👥 Equipo'],['s-estrat','🎯 Estrategias']];
+const TABS_SUP=[['s-resumen','📊 Resumen'],['c-inicio','👤 Avance por cobrador'],['s-metas','🎯 Metas y semanas'],['s-retiros','💸 Retiros'],['s-refis','🔁 Refinanciamientos'],['s-mora','📈 Mora proyectada'],['s-cobro','💵 Cobro efectivo'],['s-gest','📝 Gestiones'],['s-listado','📋 Listado'],['s-registros','🧾 Registros'],['s-cargar','⬆️ Cargar datos'],['s-equipo','👥 Equipo'],['s-estrat','🎯 Estrategias']];
 const TABS_COB=[['c-inicio','🏠 Mi avance'],['c-registrar','➕ Registrar'],['c-cartera','📋 Mi cartera'],['c-mora','📈 Mi mora'],['c-estrat','🎯 Estrategias']];
 let tabActual='';
 function goTab(id){tabActual=id;document.querySelectorAll('.sec').forEach(s=>s.classList.toggle('on',s.id===id));
   document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===id));window.scrollTo({top:0});renderTab(id);}
 function renderTab(id){
   const f={'s-resumen':renderResumen,'s-metas':renderMetas,'s-retiros':renderRetiros,'s-refis':renderRefis,'s-mora':renderMora,'s-cobro':renderCobro,'s-gest':renderGest,'s-listado':renderListado,'s-registros':renderRegs,'s-cargar':()=>{renderEstado();alInit();},'s-equipo':renderEquipo,'s-estrat':renderSEstrat,
-    'c-inicio':renderCInicio,'c-registrar':()=>{},'c-cartera':renderCCartera,'c-mora':renderCMora,'c-estrat':renderCEstrat}[id];
+    'c-inicio':()=>S.rol==='sup'?renderCInicioSup():renderCInicio(),'c-registrar':()=>{},'c-cartera':renderCCartera,'c-mora':renderCMora,'c-estrat':renderCEstrat}[id];
   try{f&&f();}catch(e){console.error(e);}
 }
 async function iniciar(ses){
@@ -916,8 +917,8 @@ async function cambiarMes(m){S.mes=m;S.unsub.forEach(f=>{try{f()}catch(e){}});S.
    CARGA DE DATOS
    ===================================================================== */
 async function cargarSup(){
-  S.unsub.push(DB.listen('metas',[],docs=>{const d=docs.find(x=>x.id===S.mes);S.metas=d?d.cobs:null;S.libresMes=d&&d.libres?d.libres:null;if(['s-resumen','s-metas','s-mora'].includes(tabActual))renderTab(tabActual);}));
-  S.unsub.push(DB.listen('registros',[['mes','==',S.mes]],docs=>{S.regs=docs;if(['s-resumen','s-metas','s-registros','s-retiros'].includes(tabActual))renderTab(tabActual);}));
+  S.unsub.push(DB.listen('metas',[],docs=>{const d=docs.find(x=>x.id===S.mes);S.metas=d?d.cobs:null;S.libresMes=d&&d.libres?d.libres:null;if(['s-resumen','s-metas','s-mora','c-inicio'].includes(tabActual))renderTab(tabActual);}));
+  S.unsub.push(DB.listen('registros',[['mes','==',S.mes]],docs=>{S.regs=docs;if(['s-resumen','s-metas','s-registros','s-retiros','c-inicio'].includes(tabActual))renderTab(tabActual);}));
   const [ls,rf,mo,es,eq,lh,rh,ce]=await Promise.all([DB.list('listado'),DB.list('refis'),DB.list('mora'),DB.get('config/estado'),DB.list('equipo'),DB.list('listadoresumen'),DB.list('refishist'),DB.list('cobro')]).catch(e=>{console.error(e);return [[],[],[],null,[],[],[],[]];});
   S.cobro=(ce||[]).sort((a,b)=>a.id.localeCompare(b.id));
   S.gest={};try{(await DB.list('gestiones',[['mes','==',S.mes]])).forEach(d=>S.gest[d.cob]=d.v||[]);}catch(e){console.error(e);}
@@ -2063,7 +2064,7 @@ function pulsoChart(chartId,r){mkChart(chartId,{data:{labels:r.dias.map(x=>x.d.s
   options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+m$(c.raw)}}},scales:{x:{grid:{display:false}},y:{beginAtZero:true,ticks:{callback:v=>m0(v)}}}}});}
 function pulToggle(t,fn){return `<div class="chips" style="margin:0"><span class="chip ${t==='L'?'on':''}" onclick="${fn}('L')">✅ Libera</span><span class="chip ${t==='C'?'on':''}" onclick="${fn}('C')">🛡️ Contiene total</span></div>`;}
 /* cobrador */
-function setPulCob(t){PUL_T_COB=t;renderCPulso();}
+function setPulCob(t){PUL_T_COB=t;if(S.rol==='sup'){renderCInicioSup();return;}renderCPulso();}
 function renderCPulso(){const box=$('cPulso');if(!box)return;const r=pulsoCalc(S.moraCob,S.mes,S.cob,PUL_T_COB);
   if(!r){box.innerHTML='<h3>📊 Mi pulso diario</h3><div class="sub">Aparecerá cuando tu supervisor cargue la mora proyectada del mes.</div>';return;}
   box.innerHTML=`<h3>📊 Mi pulso diario de recuperación</h3><div class="sub">Cuánto recuperaste en cada corte frente a lo que necesitas por día · corte ${dmy(r.u.d)}</div>`+pulsoHTML(r,PUL_T_COB,'chCPulso',pulToggle(PUL_T_COB,'setPulCob'));
@@ -2118,6 +2119,48 @@ function renderCInicio(){
     <button class="btn ghost sm" style="margin-top:10px" onclick="cView='siembra';goTab('c-cartera')">🌱 Ver mi siembra</button>`;
   const regs=[...S.regs].sort((a,b)=>tsMs(b.ts)-tsMs(a.ts));const now=Date.now();
   $('cRegs').innerHTML=regs.length?regs.map(r=>{const can=!r.ts||now-tsMs(r.ts)<86400000;return `<div class="reg-it"><div><span class="badge ${r.tipo==='refi'?'t-refi':'t-retiro'}">${r.tipo==='refi'?'Refinanciamiento':'Retiro'}</span> <b>${m$(r.monto)}</b><div class="xs mut">${dmy(r.dia)} · ${esc(r.cliente?.nom||'sin cliente')}${(r.cliente?.creditos||[]).length?' · créd. '+r.cliente.creditos.map(c=>esc(c.cc)).join(', '):''}${r.nota?' · '+esc(r.nota):''}</div>${r.tipo==='retiro'?(()=>{const v=estBaja(r);const st=v==='SI'?['✅ DADO DE BAJA','#dcfce7','#166534']:v==='OTRO'?['📝 OTRO','#e0e9ff','#1e3a8a']:['⏳ PENDIENTE DE BAJA','#fef3c7','#92400e'];return `<div style="margin-top:5px"><span class="badge" style="background:${st[1]};color:${st[2]};font-weight:700">${st[0]}</span>${v==='OTRO'&&r.bajaObs?`<div class="xs" style="color:#1e3a8a;margin-top:3px">📝 ${esc(r.bajaObs)}</div>`:''}</div>`;})():''}</div>${can?`<button class="btn ghost sm" onclick="borrarReg('${r.id}')">🗑</button>`:''}</div>`;}).join(''):'<div class="mut center" style="padding:16px">Aún no registras nada este mes. Toca ➕ Registrar.</div>';
+}
+/* ---------- SUPERVISOR · Avance por cobrador (misma vista de "Mi avance" del cobrador) ---------- */
+let svCob='';
+function setSvCob(v){svCob=v;renderCInicioSup();}
+function svDatos(id){
+  const A=id==='__ALL',moraCob={},cobroCob={};
+  S.mora.forEach(sn=>{const rows=(sn.filas||[]).filter(f=>A||f.cob===id);if(!rows.length)return;
+    if(!A){moraCob[sn.id]=rows;return;}
+    const g={};rows.forEach(f=>{const o=g[f.cal]=g[f.cal]||{cal:f.cal,si:0,sd:0,sc:0,sl:0,sr:0};['si','sd','sc','sl','sr'].forEach(k=>o[k]+=(+f[k]||0));});
+    moraCob[sn.id]=Object.values(g);});
+  S.cobro.forEach(sn=>{const rows=(sn.filas||[]).filter(f=>A||f.cob===id);if(!rows.length)return;
+    if(!A){cobroCob[sn.id]=rows[0];return;}
+    const o={c:0,d:0,l:0,t:0};rows.forEach(f=>['c','d','l','t'].forEach(k=>o[k]+=(+f[k]||0)));cobroCob[sn.id]=o;});
+  let listado,refis,regs,metas=S.metas;
+  if(A){
+    listado={__ALL:{cl:COBS.flatMap(c=>(S.listado[c.id]&&S.listado[c.id].cl)||[])}};
+    refis={__ALL:COBS.flatMap(c=>S.refis[c.id]||[])};
+    regs=S.regs.map(r=>({...r,cob:'__ALL'}));
+    let rm=0,fm=0,sl=0,sc=0,sw=0;const dias=Object.keys(moraCob).filter(d=>d.slice(0,7)===S.mes).sort();const ult=dias.length?S.mora.find(x=>x.id===dias[dias.length-1]):null;
+    COBS.forEach(c=>{const m=metaDe(c.id);rm+=m.rm;fm+=m.fm;const t=ult?moraTot(ult,c.id):null;if(t&&t.si){sl+=m.ml*t.si;sc+=m.mc*t.si;sw+=t.si;}});
+    const m0_=metaDe(COBS[0].id);
+    metas={...(S.metas||{}),__ALL:{rm,fm,ml:sw?sl/sw:m0_.ml,mc:sw?sc/sw:m0_.mc}};
+  }else{
+    listado={[id]:S.listado[id]};refis=S.refis;regs=S.regs.filter(r=>r.cob===id);
+  }
+  return {moraCob,cobroCob,listado,refis,regs,metas};
+}
+function renderCInicioSup(){
+  const bar=$('svBar');bar.classList.remove('hidden');
+  bar.innerHTML=`<div class="card" style="margin-bottom:14px;display:flex;flex-wrap:wrap;gap:10px;align-items:center"><b>👤 Avance por cobrador</b><select class="inp" style="width:auto;min-width:240px" onchange="setSvCob(this.value)"><option value="">Todos los cobradores</option>${COBS.map(c=>`<option value="${c.id}"${c.id===svCob?' selected':''}>${esc(c.corto)}</option>`).join('')}</select><span class="xs mut">Misma vista que ve el cobrador en "Mi avance"</span></div>`;
+  const id=svCob||'__ALL';
+  const bak={cob:S.cob,moraCob:S.moraCob,cobroCob:S.cobroCob,listado:S.listado,refis:S.refis,regs:S.regs,metas:S.metas};const nReal=COBS.length;
+  try{
+    const d=svDatos(id);
+    if(id==='__ALL'){const o={id:'__ALL',corto:'Todos',full:'TODOS LOS COBRADORES',rm:0,fm:0};COBS.push(o);COB_BY_ID.__ALL=o;}
+    S.cob=id;S.moraCob=d.moraCob;S.cobroCob=d.cobroCob;S.listado=d.listado;S.refis=d.refis;S.regs=d.regs;S.metas=d.metas;
+    renderCInicio();
+  }finally{
+    Object.assign(S,bak);COBS.length=nReal;delete COB_BY_ID.__ALL;
+  }
+  const h=$('cHero');if(h){const g=h.querySelector('.mut.sm'),t=h.querySelector('h2');if(g)g.textContent='Vista del supervisor';if(t)t.textContent=id==='__ALL'?'Todos los cobradores':COB_BY_ID[id].corto;}
+  document.querySelectorAll('#c-inicio button[onclick*="c-registrar"],#c-inicio button[onclick*="c-cartera"]').forEach(b=>b.style.display='none');
 }
 let tipoReg='retiro',cliSel=null;
 function setTipo(t){tipoReg='retiro';$('tpR').classList.toggle('on',t==='retiro');$('tpF').classList.toggle('on',t==='refi');}
