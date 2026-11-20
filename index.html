@@ -41,6 +41,7 @@ input,select,textarea{font-family:inherit;font-size:14px}
 #login{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;
   background:radial-gradient(1200px 600px at 10% -10%,#1b3f86 0,transparent 60%),radial-gradient(900px 500px at 110% 110%,#7a5600 0,transparent 55%),linear-gradient(135deg,#071735,#0a1f44 60%,#0d2a5e)}
 #modSel,#modTiendas{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;gap:22px;background:radial-gradient(1200px 600px at 10% -10%,#1b3f86 0,transparent 60%),radial-gradient(900px 500px at 110% 110%,#7a5600 0,transparent 55%),linear-gradient(135deg,#071735,#0a1f44 60%,#0d2a5e)}
+#modTiendas{display:block;min-height:0;padding:0;gap:0;background:none}
 .mod-h{color:#fff;text-align:center}.mod-h img{height:64px;border-radius:12px}.mod-h h2{margin:10px 0 4px;font:800 26px Montserrat,Inter,sans-serif}.mod-h p{margin:0;color:#c9d4ea;font-size:14px}
 .mod-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px;width:100%;max-width:760px}
 .mod-card{background:rgba(255,255,255,.97);border:0;border-radius:20px;padding:24px 22px;text-align:left;cursor:pointer;box-shadow:0 20px 40px rgba(0,0,0,.3);transition:transform .15s;border-top:6px solid #e8a317;font-family:inherit}.mod-card:hover{transform:translateY(-3px)}
@@ -289,8 +290,22 @@ canvas{max-width:100%}
   <button class="pill" style="cursor:pointer;background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.3)" onclick="logout()">Salir ⎋</button>
 </section>
 <section id="modTiendas" class="hidden">
-  <div class="mod-h"><div style="font-size:52px">🏬</div><h2>TIENDAS MARCIMEX</h2><p>Módulo en construcción: aquí trabajaremos la información de las tiendas.</p></div>
-  <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center"><button class="btn gold" onclick="volverModulos()">← Volver a módulos</button><button class="pill" style="cursor:pointer;background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.3)" onclick="logout()">Salir ⎋</button></div>
+<header class="app">
+  <div class="hd-row">
+    <img data-logo src="" alt="logo">
+    <div class="hd-tt"><div class="t1">TIENDAS MARCIMEX<span class="az-c360"> · Tiendas activas</span></div><div class="t2" id="tiT2">Mora proyectada, retiros y refinanciamientos por tienda</div></div>
+    <div class="hd-r">
+      <button class="pill" style="cursor:pointer" onclick="volverModulos()">⇄ Módulos</button>
+      <select id="tiMes" class="pill" onchange="tiCambiarMes(this.value)"></select>
+      <span class="pill" id="tiPill"></span>
+      <button class="pill" style="cursor:pointer" onclick="logout()">Salir ⎋</button>
+    </div>
+  </div>
+  <nav class="tabs" id="tiTabs"></nav>
+</header>
+<main id="tiMain"></main>
+<footer class="app">Tiendas Marcimex · Zona Milagro · Christian Sánchez</footer>
+<input type="file" id="tiFile" accept=".xlsx,.xlsm,.xls" class="hidden" onchange="tiLeer(this.files[0]);this.value=''">
 </section>
 
 <section id="modAustro" class="hidden">
@@ -848,7 +863,169 @@ async function loginSup(){
 }
 let _sesPend=null;
 function elegirModulo(m){try{sessionStorage.setItem('czm_mod',m);}catch(e){}if(m==='cob'){$('modSel').classList.add('hidden');iniciar(_sesPend);}else if(m==='austro')mostrarAustro();else mostrarTiendas();}
-function mostrarTiendas(){$('modSel').classList.add('hidden');$('app').classList.add('hidden');$('modTiendas').classList.remove('hidden');}
+/* =====================================================================
+   TIENDAS MARCIMEX · solo tiendas activas (mora por tienda + retiros + refinanciamientos + listado)
+   ===================================================================== */
+const TI_ACT=['MX BABAHOYO III-COMERCIAL','MX BABAHOYO-COMERCIAL','MP XP NARANJITO-COMERCIAL','MX MILAGRO - COMERCIAL','MX EL TRIUNFO-COMERCIAL','MX BUCAY-COMERCIAL','MX XP TRONCAL-COMERCIAL','MP MILAGRO -COMERCIAL','MX NARANJITO-COMERCIAL','MX MILAGRO II-COMERCIAL','MX MILAGRO 3 - COMERCIAL'];
+const tiN=t=>String(t??'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Z0-9]/g,'');
+const TI_KEY=new Map(TI_ACT.map(t=>[tiN(t),t]));
+const tiCorto=t=>String(t).replace(/\s*-?\s*COMERCIAL\s*$/i,'').trim();
+const TI_TABS=[['ti-resumen','📊 Resumen'],['ti-retiros','💸 Retiros'],['ti-refis','🔁 Refinanciamientos'],['ti-listado','📋 Listado'],['ti-cargar','⬆️ Cargar tiendas']];
+const TI={mes:hoyYMD().slice(0,7),tab:'ti-cargar',dias:{},corte:'',listado:{},refis:{},regs:[],tmp:null,lsT:'',lsQ:'',lsPage:0};
+function tiMesOpts(){const sm=$('tiMes');const ms=[];const d=new Date();for(let i=0;i<6;i++){const x=new Date(d.getFullYear(),d.getMonth()-i,1);ms.push(`${x.getFullYear()}-${pad(x.getMonth()+1)}`);}
+  if(!ms.includes(TI.mes))ms.push(TI.mes);ms.sort().reverse();sm.innerHTML=ms.map(m=>`<option value="${m}">${mesNombre(m)}</option>`).join('');sm.value=TI.mes;}
+async function mostrarTiendas(){
+  ['modSel','app','modAustro','login'].forEach(i=>{const e=$(i);if(e)e.classList.add('hidden');});
+  const f=$('fab');if(f)f.classList.add('hidden');
+  $('modTiendas').classList.remove('hidden');
+  const p=$('tiPill');if(DEMO){p.textContent='Modo demo';p.className='pill demo';}else if(navigator.onLine){p.textContent='En línea';p.className='pill live';}else{p.textContent='Sin conexión';p.className='pill off';}
+  $('tiTabs').innerHTML=TI_TABS.map(([id,t])=>`<button data-t="${id}" onclick="tiGo('${id}')">${t}</button>`).join('');
+  tiMesOpts();await tiLoad();
+  tiGo(tiCortes().length?'ti-resumen':'ti-cargar');
+}
+async function tiLoad(){
+  $('tiMain').innerHTML='<div class="card az-empty"><b>Cargando tiendas…</b></div>';
+  try{
+    const [mt,ls,rf,rg]=await Promise.all([DB.get('config/moratienda'),DB.list('listado'),DB.list('refis'),DB.list('registros',[['mes','==',TI.mes]])]);
+    try{TCRED=await DB.get('config/tiendascred');}catch(e){}
+    TI.dias=(mt&&mt.dias)||{};TI.listado={};(ls||[]).forEach(d=>TI.listado[d.id]=d);TI.refis={};(rf||[]).forEach(d=>TI.refis[d.id]=d.items||[]);TI.regs=rg||[];
+  }catch(e){console.error(e);toast('No se pudieron cargar los datos: '+(e.code||e.message));}
+  const cs=tiCortes();if(!cs.includes(TI.corte))TI.corte=cs[cs.length-1]||'';
+}
+async function tiCambiarMes(m){TI.mes=m;TI.tmp=null;await tiLoad();tiGo(tiCortes().length?TI.tab==='ti-cargar'?'ti-resumen':TI.tab:'ti-cargar');}
+function tiGo(id){TI.tab=id;document.querySelectorAll('#tiTabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===id));window.scrollTo({top:0});tiRender();}
+function tiCortes(){return Object.keys(TI.dias||{}).filter(d=>d.slice(0,7)===TI.mes).sort();}
+function tiSetCorte(k){TI.corte=k;tiRender();}
+async function tiActualizar(){const k=TI.corte;await tiLoad();if(k&&TI.dias[k])TI.corte=k;toast('Datos actualizados');tiRender();}
+/* ---- cálculos ---- */
+function tiMora(){const fs=(TI.dias&&TI.dias[TI.corte])||[];const por={},zt={si:0,sd:0,sc:0,sl:0,sr:0},zc={};
+  fs.forEach(f=>{const k=tiN(f.t);if(!TI_KEY.has(k))return;const o=por[k]=por[k]||{k,n:TI_KEY.get(k),tot:null,cals:{}};
+    if(f.cal==='Total'){o.tot=f;['si','sd','sc','sl','sr'].forEach(c=>zt[c]+=(+f[c]||0));}else{o.cals[f.cal]=f;const z=zc[f.cal]=zc[f.cal]||{cal:f.cal,si:0,sd:0,sc:0,sl:0,sr:0};['si','sd','sc','sl','sr'].forEach(c=>z[c]+=(+f[c]||0));}});
+  const P=v=>pctsF(v&&v.si?v:null);
+  return {por,zona:{...zt,...P(zt)},cals:Object.values(zc).sort((a,b)=>(RANK_CAL[a.cal]??9)-(RANK_CAL[b.cal]??9)),P};}
+function tiKeyDe(t){const k=tiN(t);return TI_KEY.has(k)?k:'';}
+function tiDe(cob,cc,t){if(t)return t;const l=TI.listado[cob];const c=l&&(l.cl||[]).flatMap(x=>x.creds||[]).find(k=>k.cc===cc);if(c&&c.t)return c.t;const i=TCRED&&TCRED.m?TCRED.m[cc]:undefined;return (i!=null&&TCRED.n[i])||'SIN TIENDA';}
+function tiRetiros(){const out=[];
+  (TI.regs||[]).filter(r=>r.tipo!=='refi'&&r.mes===TI.mes).forEach(r=>{const cr=(r.cliente&&r.cliente.creditos)||[];
+    if(!cr.length){out.push({r,cc:'',tienda:'SIN TIENDA',monto:+r.monto||0});return;}
+    cr.forEach(c=>out.push({r,cc:c.cc,tienda:tiDe(r.cob,c.cc,c.t),monto:+c.s||0}));});
+  return out;}
+function tiRefis(){const [d1,d2]=rangoMes(TI.mes),out=[];
+  Object.entries(TI.refis||{}).forEach(([cob,it])=>(it||[]).forEach(x=>{if(x.fc&&x.fc>=d1&&x.fc<=d2)out.push({cob,...x});}));return out;}
+function tiListadoCli(){const out=[];
+  Object.entries(TI.listado||{}).forEach(([cob,l])=>(l.cl||[]).forEach(c=>{const cr=(c.creds||[]).filter(k=>tiKeyDe(k.t));if(!cr.length)return;
+    const porT={};cr.forEach(k=>{const kk=tiKeyDe(k.t);const o=porT[kk]=porT[kk]||{n:0,s:0};o.n++;o.s+=(+k.s||0);});
+    Object.entries(porT).forEach(([kk,o])=>out.push({cob,c,k:kk,tienda:TI_KEY.get(kk),nc:o.n,sc:+o.s.toFixed(2)}));}));
+  return out;}
+function tiTools(){const ks=tiCortes().slice().reverse();
+  return `<div class="az-tools az-noprint"><span class="lb">Corte de mora</span><select class="inp" onchange="tiSetCorte(this.value)">${ks.map(k=>`<option value="${k}" ${k===TI.corte?'selected':''}>${dmy(k)}</option>`).join('')}</select><span class="az-sp"></span><button class="btn ghost sm" onclick="tiActualizar()">↻ Actualizar</button></div>`;}
+function tiRender(){const f={'ti-resumen':tiResumen,'ti-retiros':tiVRetiros,'ti-refis':tiVRefis,'ti-listado':tiVListado,'ti-cargar':tiVCargar}[TI.tab];
+  try{$('tiMain').innerHTML=f();}catch(e){console.error(e);$('tiMain').innerHTML='<div class="card az-empty"><b>No se pudo mostrar esta pestaña</b>'+esc(e.message)+'</div>';}
+  if(TI.tab==='ti-listado')tiLsPintar();}
+const tiVacio=()=>`<div class="card az-empty"><b>Aún no hay mora de tiendas en ${esc(mesNombre(TI.mes))}</b>Sube el Excel "Mora Proyectada por Tienda" en la pestaña <b>Cargar tiendas</b>.</div>`;
+/* ---- resumen ---- */
+function tiResumen(){
+  if(!TI.corte)return tiVacio();
+  const M=tiMora(),z=M.zona,ret=tiRetiros(),rf=tiRefis(),lc=tiListadoCli();
+  const rA={},fA={},lA={};let rT=0,rN=new Set(),fT=0,fN=0,lN=new Set(),lS=0;
+  ret.forEach(x=>{const k=tiKeyDe(x.tienda);if(!k)return;const o=rA[k]=rA[k]||{m:0,r:new Set()};o.m+=x.monto;o.r.add(x.r.id);rT+=x.monto;rN.add(x.r.id);});
+  rf.forEach(x=>{const k=tiKeyDe(x.tienda);if(!k)return;const o=fA[k]=fA[k]||{m:0,n:0};o.m+=(+x.saldo||0);o.n++;fT+=(+x.saldo||0);fN++;});
+  lc.forEach(x=>{const o=lA[x.k]=lA[x.k]||{cli:0,nc:0,s:0};o.cli++;o.nc+=x.nc;o.s+=x.sc;lN.add(x.cob+'|'+x.c.cod);lS+=x.sc;});
+  const kp=`<div class="grid g4" style="margin-bottom:14px">`+
+    kpiCard('📈','Libera zona (tiendas activas)',pctTxt(z.pl,2),`Saldo inicial ${m0(z.si)} · corte ${dmy(TI.corte)}`,null,null,'#dcfce7')+
+    kpiCard('🛡️','Contiene total zona',pctTxt(z.pct,2),`Contiene ${pctTxt(z.pc,2)} · Libera ${pctTxt(z.pl,2)}`,null,null,'#dbe7ff')+
+    kpiCard('💸','Retiros (panel supervisión)',m0(rT),`${rN.size} registro${rN.size===1?'':'s'} de cobradores en tiendas activas`,null,null,'#fde7c4')+
+    kpiCard('🔁','Refinanc. a la fecha (listado)',m0(fT),`${fN} crédito${fN===1?'':'s'} · ${mesNombre(TI.mes)}`,null,null,'#fff1cc')+`</div>`;
+  const cl=(v,zv)=>v==null?'':(v>=zv?'ok':'bad');
+  const rows=Object.values(M.por).map(o=>({...o,...M.P(o.tot)})).sort((a,b)=>(a.pct??9)-(b.pct??9)).map(o=>{const a=rA[o.k]||{m:0,r:new Set()},b=fA[o.k]||{m:0,n:0},c=lA[o.k]||{cli:0,nc:0,s:0};
+    return `<tr><td class="cobn nowrap"><a href="#" onclick="tiVerLs('${o.k}');return false">${esc(o.n)}</a></td><td class="num">${m0(o.tot?o.tot.si:0)}</td><td class="num"><span class="az-tg ${cl(o.pl,z.pl)}">${pctTxt(o.pl,2)}</span></td><td class="num"><span class="az-tg ${cl(o.pct,z.pct)}">${pctTxt(o.pct,2)}</span></td><td class="num">${m$(a.m)}</td><td class="num">${a.r.size}</td><td class="num">${m$(b.m)}</td><td class="num">${b.n}</td><td class="num">${fmt(c.cli,0)}</td><td class="num">${m$(c.s)}</td></tr>`;}).join('');
+  const faltan=TI_ACT.filter(t=>!M.por[tiN(t)]);
+  const sinT=ret.filter(x=>!tiKeyDe(x.tienda)).reduce((t,x)=>t+x.monto,0);
+  const tr=M.cals.map(c=>{const p=M.P(c);return `<tr><td class="b">${esc(c.cal)}</td><td class="num">${m0(c.si)}</td><td class="num">${m0(c.sl+c.sr)}</td><td class="num">${pctTxt(p.pl,2)}</td><td class="num">${m0(c.sc)}</td><td class="num">${pctTxt(p.pct,2)}</td></tr>`;}).join('');
+  return tiTools()+kp+
+   `<div class="card"><h3>Tiendas activas · de menor a mayor Contiene total</h3><div class="sub">Zona = suma de las ${Object.keys(M.por).length} tiendas activas · verde = igual o mejor que la zona, rojo = debajo de la zona</div><div class="tw"><table><thead><tr><th>Tienda</th><th class="num">Saldo inicial</th><th class="num">Libera</th><th class="num">Contiene total</th><th class="num">Retiros $</th><th class="num">Reg.</th><th class="num">Refinanc. $</th><th class="num">Créd.</th><th class="num">Clientes listado</th><th class="num">Saldo listado</th></tr></thead><tbody>${rows}</tbody><tfoot><tr style="font-weight:800;background:#f4f7fc"><td>ZONA (activas)</td><td class="num">${m0(z.si)}</td><td class="num">${pctTxt(z.pl,2)}</td><td class="num">${pctTxt(z.pct,2)}</td><td class="num">${m$(rT)}</td><td class="num">${rN.size}</td><td class="num">${m$(fT)}</td><td class="num">${fN}</td><td class="num">${fmt(lN.size,0)}</td><td class="num">${m$(lS)}</td></tr></tfoot></table></div>
+   ${faltan.length?`<div class="info" style="margin-top:10px">Tiendas activas que no vienen en el archivo de este corte: ${faltan.map(esc).join(', ')}.</div>`:''}
+   ${sinT>0?`<div class="info" style="margin-top:10px">Hay ${m$(sinT)} en retiros que no se pudieron ligar a una tienda activa (tienda inactiva o sin tienda).</div>`:''}</div>
+   <div class="card" style="margin-top:14px"><h3>Zona por tramo de calificación</h3><div class="sub">Solo tiendas activas · corte ${dmy(TI.corte)}</div><div class="tw"><table><thead><tr><th>Tramo</th><th class="num">Saldo inicial</th><th class="num">Libera $</th><th class="num">Libera %</th><th class="num">Contiene $</th><th class="num">Contiene total %</th></tr></thead><tbody>${tr}</tbody></table></div></div>
+   <div class="xs mut" style="margin-top:8px">Retiros: lo que registran los cobradores (mismo dato del panel de supervisión), ligado a la tienda de cada crédito. Refinanciamientos y listado: lo que subes en "Cargar datos" del panel de cobranza, ligado por Tienda Factura.</div>`;
+}
+function tiVerLs(k){TI.lsT=k;TI.lsPage=0;tiGo('ti-listado');}
+/* ---- retiros ---- */
+function tiVRetiros(){
+  const ret=tiRetiros();const A={};let tot=0,otros=0;const regs=new Set();
+  ret.forEach(x=>{const k=tiKeyDe(x.tienda);if(!k){otros+=x.monto;return;}const o=A[k]=A[k]||{m:0,r:new Set(),b:0};o.m+=x.monto;o.r.add(x.r.id);tot+=x.monto;regs.add(x.r.id);});
+  const rows=TI_ACT.map(t=>{const k=tiN(t),o=A[k]||{m:0,r:new Set()};return `<tr><td class="cobn nowrap">${esc(t)}</td><td class="num b">${m$(o.m)}</td><td class="num">${o.r.size}</td></tr>`;}).join('');
+  const det=ret.filter(x=>tiKeyDe(x.tienda)).sort((a,b)=>String(b.r.dia).localeCompare(String(a.r.dia))).map(x=>`<tr><td class="nowrap">${dmy(x.r.dia)}</td><td class="cobn nowrap">${esc(tiCorto(TI_KEY.get(tiKeyDe(x.tienda))))}</td><td>${esc(COB_BY_ID[x.r.cob]?.corto||x.r.cob)}</td><td>${esc(x.r.cliente?.nom||'—')}<div class="xs mut">${esc(x.r.cliente?.ced||'')}</div></td><td class="nowrap">${esc(x.cc||'—')}</td><td class="num b">${m$(x.monto)}</td><td>${estBaja(x.r)==='SI'?'<span class="badge t-retiro">Dado de baja</span>':'<span class="xs mut">Pendiente</span>'}</td></tr>`).join('');
+  window._tiRet=ret.filter(x=>tiKeyDe(x.tienda)).map(x=>({Fecha:dmy(x.r.dia),Tienda:TI_KEY.get(tiKeyDe(x.tienda)),Cobrador:COB_BY_ID[x.r.cob]?.corto||x.r.cob,Cliente:x.r.cliente?.nom||'','Cédula':x.r.cliente?.ced||'','Crédito':x.cc,Monto:x.monto,'Dado de baja':estBaja(x.r)}));
+  return `<div class="card"><div class="ch"><div><h3>Retiros por tienda · ${esc(mesNombre(TI.mes))}</h3><div class="sub">Lo que registraron los cobradores en el panel de supervisión, ligado a la tienda de cada crédito · solo tiendas activas</div></div><button class="btn ghost sm" onclick="xlsxDownload(window._tiRet||[],'Retiros_Tiendas_${TI.mes}.xlsx','Retiros')">⬇ Excel</button></div>
+   <div class="sumrow"><div class="s">Retiros en tiendas activas<b>${m$(tot)}</b></div><div class="s">Registros<b>${regs.size}</b></div>${otros>0?`<div class="s">Sin tienda activa<b>${m$(otros)}</b></div>`:''}</div>
+   <div class="tw"><table><thead><tr><th>Tienda</th><th class="num">Retiros $</th><th class="num">Registros</th></tr></thead><tbody>${rows}</tbody></table></div></div>
+   <div class="card" style="margin-top:14px"><h3>Detalle de retiros</h3><div class="tw" style="max-height:520px"><table><thead><tr><th>Fecha</th><th>Tienda</th><th>Cobrador</th><th>Cliente</th><th>Crédito</th><th class="num">Monto</th><th>Baja</th></tr></thead><tbody>${det||'<tr><td colspan="7" class="center mut" style="padding:24px">Sin retiros en tiendas activas</td></tr>'}</tbody></table></div></div>`;
+}
+/* ---- refinanciamientos ---- */
+function tiVRefis(){
+  const rf=tiRefis();const A={};let tot=0,n=0,otros=0;
+  rf.forEach(x=>{const k=tiKeyDe(x.tienda);if(!k){otros+=(+x.saldo||0);return;}const o=A[k]=A[k]||{m:0,n:0};o.m+=(+x.saldo||0);o.n++;tot+=(+x.saldo||0);n++;});
+  const rows=TI_ACT.map(t=>{const o=A[tiN(t)]||{m:0,n:0};return `<tr><td class="cobn nowrap">${esc(t)}</td><td class="num b">${m$(o.m)}</td><td class="num">${o.n}</td></tr>`;}).join('');
+  const lst=rf.filter(x=>tiKeyDe(x.tienda)).sort((a,b)=>String(b.fc).localeCompare(String(a.fc)));
+  const det=lst.map(x=>`<tr><td class="nowrap">${dmy(x.fc)}</td><td class="cobn nowrap">${esc(tiCorto(TI_KEY.get(tiKeyDe(x.tienda))))}</td><td>${esc(COB_BY_ID[x.cob]?.corto||x.cob)}</td><td>${esc(x.nom||'—')}<div class="xs mut">${esc(x.ced||'')}</div></td><td class="nowrap">${esc(x.cc||'')}</td><td class="center">${calBadge(x.cal)}</td><td class="num b">${m$(x.saldo)}</td><td>${x.cancel?'<span class="xs mut">Cancelado</span>':'<span class="badge t-refi">Vigente</span>'}</td></tr>`).join('');
+  window._tiRf=lst.map(x=>({'Fecha Crédito':dmy(x.fc),Tienda:TI_KEY.get(tiKeyDe(x.tienda)),Cobrador:COB_BY_ID[x.cob]?.corto||x.cob,Cliente:x.nom||'','Cédula':x.ced||'','Cod Crédito':x.cc,'Calificación':x.cal,'Línea':x.linea||'','Saldo Crédito Final':x.saldo,Estado:x.cancel?'Cancelado':'Vigente'}));
+  return `<div class="card"><div class="ch"><div><h3>Refinanciamientos por tienda · ${esc(mesNombre(TI.mes))}</h3><div class="sub">Salen del listado que subes (Origen refinanciamiento, Fecha Crédito del mes) ligados por Tienda Factura · solo tiendas activas</div></div><button class="btn ghost sm" onclick="xlsxDownload(window._tiRf||[],'Refinanciamientos_Tiendas_${TI.mes}.xlsx','Refinanciamientos')">⬇ Excel</button></div>
+   <div class="sumrow"><div class="s">Refinanc. en tiendas activas<b>${m$(tot)}</b></div><div class="s">Créditos<b>${n}</b></div>${otros>0?`<div class="s">Sin tienda activa<b>${m$(otros)}</b></div>`:''}</div>
+   <div class="tw"><table><thead><tr><th>Tienda</th><th class="num">Saldo crédito final</th><th class="num">Créditos</th></tr></thead><tbody>${rows}</tbody></table></div></div>
+   <div class="card" style="margin-top:14px"><h3>Detalle de refinanciamientos</h3><div class="tw" style="max-height:520px"><table><thead><tr><th>Fecha</th><th>Tienda</th><th>Cobrador</th><th>Cliente</th><th>Crédito</th><th class="center">Cal.</th><th class="num">Saldo</th><th>Estado</th></tr></thead><tbody>${det||'<tr><td colspan="8" class="center mut" style="padding:24px">Sin refinanciamientos en tiendas activas</td></tr>'}</tbody></table></div></div>`;
+}
+/* ---- listado ---- */
+function tiVListado(){
+  const opts=`<option value="">Todas las tiendas activas</option>`+TI_ACT.map(t=>`<option value="${tiN(t)}" ${tiN(t)===TI.lsT?'selected':''}>${esc(t)}</option>`).join('');
+  return `<div class="card"><div class="ch"><div><h3>Listado de clientes por tienda</h3><div class="sub">Clientes del listado que subes, con créditos en las tiendas activas (la tienda sale de Tienda Factura de cada crédito)</div></div><button class="btn ghost sm" onclick="tiExportLs()">⬇ Excel del filtro</button></div>
+   <div class="fbar"><select class="inp" onchange="TI.lsT=this.value;TI.lsPage=0;tiLsPintar()">${opts}</select><input class="inp" id="tiLsQ" placeholder="🔎 Cliente o cédula" value="${esc(TI.lsQ)}" oninput="TI.lsQ=this.value;TI.lsPage=0;tiLsPintar()" style="flex:1;min-width:200px"></div>
+   <div class="sumrow" id="tiLsSum"></div><div class="tw"><table id="tiLsTb"></table></div><div class="pager" id="tiPager"></div></div>`;}
+function tiLsFiltrado(){const q=(TI.lsQ||'').trim().toUpperCase();
+  return tiListadoCli().filter(x=>(!TI.lsT||x.k===TI.lsT)&&(!q||String(x.c.nom||'').toUpperCase().includes(q)||String(x.c.ced||'').includes(q))).sort((a,b)=>b.sc-a.sc);}
+function tiLsPintar(){const arr=tiLsFiltrado();window._tiLs=arr;
+  const sc=arr.reduce((t,x)=>t+x.sc,0),cv=arr.reduce((t,x)=>t+(+x.c.cv||0),0);
+  $('tiLsSum').innerHTML=`<div class="s">Clientes<b>${fmt(arr.length,0)}</b></div><div class="s">Saldo en la tienda<b>${m0(sc)}</b></div><div class="s">Cuota vencida (cliente)<b>${m0(cv)}</b></div>`;
+  const pg=arr.slice(TI.lsPage*PAGE,(TI.lsPage+1)*PAGE);
+  $('tiLsTb').innerHTML='<thead><tr><th>#</th><th>Cliente</th><th>Tienda</th><th>Cobrador</th><th class="center">Cal. mensual</th><th class="center">Días</th><th class="num">Créd.</th><th class="num">Saldo en tienda</th><th class="num">Cuota vencida</th><th>Rodam.</th></tr></thead><tbody>'+
+   (pg.length?pg.map((x,i)=>`<tr><td class="mut xs">${TI.lsPage*PAGE+i+1}</td><td><div class="b">${esc(x.c.nom)}</div><div class="xs mut">${esc(x.c.ced||'')}</div></td><td class="cobn nowrap">${esc(tiCorto(x.tienda))}</td><td class="sm">${esc(COB_BY_ID[x.cob]?.corto||x.cob)}</td><td class="center">${calBadge(x.c.cm)}</td><td class="center b">${x.c.dias??''}</td><td class="num">${x.nc}</td><td class="num b">${m$(x.sc)}</td><td class="num">${m$(x.c.cv)}</td><td>${rodBadge(x.c.rod)}</td></tr>`).join(''):'<tr><td colspan="10" class="center mut" style="padding:28px">Sin clientes para mostrar</td></tr>')+'</tbody>';
+  pager('tiPager',arr.length,TI.lsPage,'tiLsGo');}
+function tiLsGo(p){TI.lsPage=p;tiLsPintar();}
+function tiExportLs(){xlsxDownload((window._tiLs||[]).map(x=>({Tienda:x.tienda,Cliente:x.c.nom,'Cédula':x.c.ced,'Teléfono':x.c.tel,Cobrador:COB_BY_ID[x.cob]?.corto||x.cob,'Calificación Mensual':x.c.cm,'Días (HOY)':x.c.dias,'Créditos en la tienda':x.nc,'Saldo en la tienda':x.sc,'Cuota vencida':x.c.cv,Rodamiento:x.c.rod})),`Listado_Tiendas_${hoyYMD()}.xlsx`,'Listado');}
+/* ---- cargar tiendas ---- */
+function tiVCargar(){
+  const cs=tiCortes();const hist=cs.length?`<div class="card" style="margin-top:14px"><h3>Cortes guardados · ${esc(mesNombre(TI.mes))}</h3><div class="sub">${cs.map(k=>dmy(k)).join(' · ')}</div></div>`:'';
+  return `<div class="card"><h3>⬆️ Cargar tiendas</h3><div class="sub">Sube el Excel "Mora Proyectada por Tienda". Se guardan solo las ${TI_ACT.length} tiendas activas y el total de la zona es la suma de ellas.</div>
+   <div style="margin:10px 0"><button class="btn" onclick="$('tiFile').click()">⬆️ Elegir archivo</button></div><div id="tiPrev">${tiPrev()}</div>
+   <div class="xs mut" style="margin-top:10px"><b>Tiendas activas:</b> ${TI_ACT.map(esc).join(' · ')}</div></div>`+hist;}
+function tiPrev(){const t=TI.tmp;if(!t)return '';
+  if(t.err)return `<div class="info" style="background:#fee2e2;border-color:#fecaca;color:#7f1d1d">${esc(t.err)}</div>`;
+  const z=t.z,hay=new Set(t.filas.map(f=>tiN(f.t)));const falt=TI_ACT.filter(a=>!hay.has(tiN(a)));
+  return `<div class="okbox"><b>Archivo leído: ${esc(t.nombre)}</b><br>${hay.size} de ${TI_ACT.length} tiendas activas encontradas · ${t.ignoradas} tienda(s) inactivas ignoradas<br>Zona (activas): saldo inicial ${m0(z.si)} · Libera ${pctTxt(z.pl,2)} · Contiene total ${pctTxt(z.pct,2)}</div>
+   ${falt.length?`<div class="info" style="margin-top:8px">No vienen en el archivo: ${falt.map(esc).join(', ')}</div>`:''}
+   <div class="fld" style="margin-top:10px"><label>Fecha del corte <span class="xs mut">(por defecto, el día anterior)</span></label><input type="date" id="tiFechaCarga" class="inp" value="${ayerYMD()}" max="${hoyYMD()}" style="max-width:200px"></div>
+   <button class="btn gold" onclick="tiPublicar(this)">🚀 Guardar corte de tiendas</button>`;}
+async function tiLeer(file){if(!file)return;TI.tmp=null;$('tiPrev').innerHTML='<div class="info">Leyendo archivo…</div>';
+  try{const aoa=await leerXlsx(file);const nm=v=>String(v??'').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+    const hi=aoa.findIndex(r=>r.some(c=>nm(c)==='tienda')&&r.some(c=>nm(c).startsWith('calificacion')));
+    if(hi<0)throw new Error('No encuentro las columnas "Tienda" y "Calificacion Mensual". ¿Es el Excel Mora Proyectada por Tienda?');
+    const H=aoa[hi].map(nm),ix=n=>H.findIndex(h=>h===n),iT=ix('tienda'),iC=H.findIndex(h=>h.startsWith('calificacion')),iSI=ix('saldo_inicial'),iSD=ix('saldo_deteriora'),iSC=ix('saldo_contiene'),iSL=ix('saldo_libera'),iSR=ix('saldo_recaudado');
+    if(iSI<0||iSC<0||iSL<0||iSR<0)throw new Error('Faltan columnas de saldos (Saldo_Inicial, Saldo_Contiene, Saldo_Libera, Saldo_Recaudado).');
+    const filas=[],otras=new Set();let last='';
+    aoa.slice(hi+1).forEach(r=>{const t=String(r[iT]??'').trim();if(t)last=t;const cal=String(r[iC]??'').trim();if(!last||!cal||/^total$/i.test(last))return;
+      if(!TI_KEY.has(tiN(last))){otras.add(tiN(last));return;}
+      filas.push({t:TI_KEY.get(tiN(last)),cal:cal.toLowerCase()==='total'?'Total':normCalif(cal),si:+num(r[iSI]).toFixed(2),sd:+num(iSD>=0?r[iSD]:0).toFixed(2),sc:+num(r[iSC]).toFixed(2),sl:+num(r[iSL]).toFixed(2),sr:+num(r[iSR]).toFixed(2)});});
+    if(!filas.length)throw new Error('El archivo no tiene ninguna de las tiendas activas.');
+    const zt={si:0,sd:0,sc:0,sl:0,sr:0};filas.filter(f=>f.cal==='Total').forEach(f=>['si','sd','sc','sl','sr'].forEach(c=>zt[c]+=f[c]));
+    TI.tmp={nombre:file.name,filas,ignoradas:otras.size,z:{...zt,...pctsF(zt.si?zt:null)}};
+  }catch(e){console.error(e);TI.tmp={err:e.message};}
+  $('tiPrev').innerHTML=tiPrev();}
+async function tiPublicar(b){const t=TI.tmp;if(!t||t.err)return;const f=$('tiFechaCarga').value;if(!f)return toast('Elige la fecha');
+  if(TI.dias[f]&&!confirm('Ya existe un corte de tiendas del '+dmy(f)+'. ¿Reemplazarlo con este archivo?'))return;
+  b.disabled=true;
+  try{const d=(await DB.get('config/moratienda'))||{};const dias=d.dias||{};dias[f]=t.filas;await DB.set('config/moratienda',{dias,ts:Date.now()});
+    TI.dias=dias;TI.mes=f.slice(0,7);TI.corte=f;TI.tmp=null;tiMesOpts();toast('✅ Corte de tiendas guardado');await tiLoad();TI.corte=f;tiGo('ti-resumen');}
+  catch(e){console.error(e);toast('No se pudo guardar: '+(e.code||e.message));b.disabled=false;}}
 function volverModulos(){try{sessionStorage.removeItem('czm_mod');}catch(e){}location.reload();}
 async function logout(){try{sessionStorage.removeItem('czm_mod');}catch(e){}S.unsub.forEach(f=>{try{f()}catch(e){}});S.unsub=[];
   try{sessionStorage.removeItem('czm_ses');}catch(e){}
