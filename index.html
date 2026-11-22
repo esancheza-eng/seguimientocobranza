@@ -577,6 +577,17 @@ canvas{max-width:100%}
 </section>
 
 <section class="sec" id="s-estrat">
+  <div class="card" style="margin-bottom:14px"><div class="ch"><div><h3>🖼️ Aviso con imagen al abrir la app</h3><div class="sub">La imagen sale como ventana cuando el cobrador abre la app. Súbela aquí y se publica para los 14 cobradores.</div></div><span class="chip" id="avEstado"></span></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;align-items:start">
+      <div>
+        <div class="fld"><label>Imagen <span class="xs mut">(JPG o PNG · se reduce sola)</span></label><input type="file" id="avFile" accept="image/*" class="inp" onchange="avPick(this.files[0])"></div>
+        <div class="fld" style="margin-top:8px"><label>Título <span class="xs mut">(opcional)</span></label><input id="avTit" class="inp" maxlength="80" placeholder="Ej: Meta de la semana" oninput="avPrev()"></div>
+        <div class="fld" style="margin-top:8px"><label>Cuándo mostrarla</label><select id="avRep" class="inp"><option value="">Una sola vez por cobrador (hasta que pulse Entendido)</option><option value="1">Cada vez que abra la app</option></select></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn gold" onclick="avPublicar(this)">🚀 Publicar aviso</button><button class="btn ghost sm" onclick="avQuitar(this)">🗑️ Quitar aviso</button></div>
+        <div class="xs mut" id="avInfo" style="margin-top:8px"></div>
+      </div>
+      <div><div class="xs mut" style="margin-bottom:6px">Así lo ve el cobrador</div><div id="avPrev" style="border:1px solid #e4e9f2;border-radius:14px;padding:12px;background:#fff;text-align:center"></div></div>
+    </div></div>
   <div class="grid g2">
     <div class="card"><div class="ch"><div><h3>🎯 Estrategias de cobranza</h3><div class="sub">Lo que escribas aquí lo ven los 14 cobradores en su pestaña 🎯 Estrategias</div></div></div>
       <textarea id="esTxt" class="inp" style="width:100%;min-height:440px;font-family:ui-monospace,Consolas,monospace;font-size:13px;line-height:1.45" oninput="esPrev()"></textarea>
@@ -871,7 +882,7 @@ const tiN=t=>String(t??'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'')
 const TI_KEY=new Map(TI_ACT.map(t=>[tiN(t),t]));
 const tiCorto=t=>String(t).replace(/\s*-?\s*COMERCIAL\s*$/i,'').trim();
 const TI_TABS=[['ti-resumen','📊 Resumen'],['ti-retiros','💸 Retiros'],['ti-refis','🔁 Refinanciamientos'],['ti-listado','📋 Listado'],['ti-cargar','⬆️ Cargar tiendas']];
-const TI={mes:hoyYMD().slice(0,7),tab:'ti-cargar',dias:{},corte:'',listado:{},refis:{},regs:[],tmp:null,lsT:'',lsQ:'',lsPage:0};
+const TI={mes:hoyYMD().slice(0,7),tab:'ti-cargar',dias:{},corte:'',listado:{},refis:{},regs:[],tmp:null,lsT:'',lsQ:'',lsPage:0,reT:''};
 function tiMesOpts(){const sm=$('tiMes');const ms=[];const d=new Date();for(let i=0;i<6;i++){const x=new Date(d.getFullYear(),d.getMonth()-i,1);ms.push(`${x.getFullYear()}-${pad(x.getMonth()+1)}`);}
   if(!ms.includes(TI.mes))ms.push(TI.mes);ms.sort().reverse();sm.innerHTML=ms.map(m=>`<option value="${m}">${mesNombre(m)}</option>`).join('');sm.value=TI.mes;}
 async function mostrarTiendas(){
@@ -906,9 +917,10 @@ function tiMora(){const fs=(TI.dias&&TI.dias[TI.corte])||[];const por={},zt={si:
 function tiKeyDe(t){const k=tiN(t);return TI_KEY.has(k)?k:'';}
 function tiDe(cob,cc,t){if(t)return t;const l=TI.listado[cob];const c=l&&(l.cl||[]).flatMap(x=>x.creds||[]).find(k=>k.cc===cc);if(c&&c.t)return c.t;const i=TCRED&&TCRED.m?TCRED.m[cc]:undefined;return (i!=null&&TCRED.n[i])||'SIN TIENDA';}
 function tiRetiros(){const out=[];
-  (TI.regs||[]).filter(r=>r.tipo!=='refi'&&r.mes===TI.mes).forEach(r=>{const cr=(r.cliente&&r.cliente.creditos)||[];
-    if(!cr.length){out.push({r,cc:'',tienda:'SIN TIENDA',monto:+r.monto||0});return;}
-    cr.forEach(c=>out.push({r,cc:c.cc,tienda:tiDe(r.cob,c.cc,c.t),monto:+c.s||0}));});
+  (TI.regs||[]).filter(r=>r.tipo!=='refi'&&r.mes===TI.mes).forEach(r=>{const cr=(r.cliente&&r.cliente.creditos)||[],mt=+r.monto||0;
+    if(!cr.length){out.push({r,cc:'',tienda:'SIN TIENDA',monto:mt});return;}
+    const ss=cr.reduce((t,c)=>t+(+c.s||0),0);
+    cr.forEach(c=>out.push({r,cc:c.cc,tienda:tiDe(r.cob,c.cc,c.t),monto:ss>0?mt*(+c.s||0)/ss:mt/cr.length}));});
   return out;}
 function tiRefis(){const [d1,d2]=rangoMes(TI.mes),out=[];
   Object.entries(TI.refis||{}).forEach(([cob,it])=>(it||[]).forEach(x=>{if(x.fc&&x.fc>=d1&&x.fc<=d2)out.push({cob,...x});}));return out;}
@@ -951,16 +963,23 @@ function tiResumen(){
 }
 function tiVerLs(k){TI.lsT=k;TI.lsPage=0;tiGo('ti-listado');}
 /* ---- retiros ---- */
+function tiSelRet(k){TI.reT=k;tiRender();}
 function tiVRetiros(){
-  const ret=tiRetiros();const A={};let tot=0,otros=0;const regs=new Set();
-  ret.forEach(x=>{const k=tiKeyDe(x.tienda);if(!k){otros+=x.monto;return;}const o=A[k]=A[k]||{m:0,r:new Set(),b:0};o.m+=x.monto;o.r.add(x.r.id);tot+=x.monto;regs.add(x.r.id);});
-  const rows=TI_ACT.map(t=>{const k=tiN(t),o=A[k]||{m:0,r:new Set()};return `<tr><td class="cobn nowrap">${esc(t)}</td><td class="num b">${m$(o.m)}</td><td class="num">${o.r.size}</td></tr>`;}).join('');
-  const det=ret.filter(x=>tiKeyDe(x.tienda)).sort((a,b)=>String(b.r.dia).localeCompare(String(a.r.dia))).map(x=>`<tr><td class="nowrap">${dmy(x.r.dia)}</td><td class="cobn nowrap">${esc(tiCorto(TI_KEY.get(tiKeyDe(x.tienda))))}</td><td>${esc(COB_BY_ID[x.r.cob]?.corto||x.r.cob)}</td><td>${esc(x.r.cliente?.nom||'—')}<div class="xs mut">${esc(x.r.cliente?.ced||'')}</div></td><td class="nowrap">${esc(x.cc||'—')}</td><td class="num b">${m$(x.monto)}</td><td>${estBaja(x.r)==='SI'?'<span class="badge t-retiro">Dado de baja</span>':'<span class="xs mut">Pendiente</span>'}</td></tr>`).join('');
-  window._tiRet=ret.filter(x=>tiKeyDe(x.tienda)).map(x=>({Fecha:dmy(x.r.dia),Tienda:TI_KEY.get(tiKeyDe(x.tienda)),Cobrador:COB_BY_ID[x.r.cob]?.corto||x.r.cob,Cliente:x.r.cliente?.nom||'','Cédula':x.r.cliente?.ced||'','Crédito':x.cc,Monto:x.monto,'Dado de baja':estBaja(x.r)}));
-  return `<div class="card"><div class="ch"><div><h3>Retiros por tienda · ${esc(mesNombre(TI.mes))}</h3><div class="sub">Lo que registraron los cobradores en el panel de supervisión, ligado a la tienda de cada crédito · solo tiendas activas</div></div><button class="btn ghost sm" onclick="xlsxDownload(window._tiRet||[],'Retiros_Tiendas_${TI.mes}.xlsx','Retiros')">⬇ Excel</button></div>
-   <div class="sumrow"><div class="s">Retiros en tiendas activas<b>${m$(tot)}</b></div><div class="s">Registros<b>${regs.size}</b></div>${otros>0?`<div class="s">Sin tienda activa<b>${m$(otros)}</b></div>`:''}</div>
+  const ret=tiRetiros(),sel=TI.reT||'';const A={};let tot=0,otros=0;const regs=new Set();
+  ret.forEach(x=>{const k=tiKeyDe(x.tienda);if(!k){otros+=x.monto;return;}const o=A[k]=A[k]||{m:0,r:new Set()};o.m+=x.monto;o.r.add(x.r.id);tot+=x.monto;regs.add(x.r.id);});
+  const rows=TI_ACT.map(t=>{const k=tiN(t),o=A[k]||{m:0,r:new Set()};return `<tr${k===sel?' style="background:#eef3ff"':''}><td class="cobn nowrap"><a href="#" onclick="tiSelRet('${k}');return false">${esc(t)}</a></td><td class="num b">${m$(o.m)}</td><td class="num">${o.r.size}</td></tr>`;}).join('')+
+    (otros>0?`<tr${sel==='__OTRAS'?' style="background:#fef3c7"':''}><td class="cobn nowrap"><a href="#" onclick="tiSelRet('__OTRAS');return false">Fuera de tiendas activas / sin tienda</a></td><td class="num b">${m$(otros)}</td><td class="num">${new Set(ret.filter(x=>!tiKeyDe(x.tienda)).map(x=>x.r.id)).size}</td></tr>`:'');
+  const lista=ret.filter(x=>sel==='__OTRAS'?!tiKeyDe(x.tienda):(sel?tiKeyDe(x.tienda)===sel:!!tiKeyDe(x.tienda))).sort((a,b)=>(b.monto-a.monto)||String(b.r.dia).localeCompare(String(a.r.dia)));
+  const sub=lista.reduce((t,x)=>t+x.monto,0),subR=new Set(lista.map(x=>x.r.id)).size;
+  const tn=x=>tiKeyDe(x.tienda)?TI_KEY.get(tiKeyDe(x.tienda)):x.tienda;
+  const det=lista.map(x=>{const r=x.r,est=estBaja(r);return `<tr><td class="nowrap">${dmy(r.dia)}</td><td class="cobn nowrap">${esc(COB_BY_ID[r.cob]?.corto||r.cob)}</td><td>${esc(r.cliente?.nom||'—')}</td><td>${esc(r.cliente?.ced||'')}</td><td class="sm">${esc(x.cc||'—')}</td><td class="center">${calBadge(r.cliente?.cm)}</td><td class="center">${rodBadge(r.cliente?.rod)}</td><td class="sm b">${esc(tn(x))}</td><td><span class="badge" style="background:${est==='SI'?'#dcfce7':est==='OTRO'?'#e0e7ff':'#fef3c7'};color:${est==='SI'?'#166534':est==='OTRO'?'#3730a3':'#92400e'};font-weight:800">${est==='SI'?'DADO DE BAJA':est}</span></td><td class="num b">${m$(x.monto)}</td></tr>`;}).join('');
+  window._tiRet=lista.map(x=>({Fecha:dmy(x.r.dia),Cobrador:COB_BY_ID[x.r.cob]?.corto||x.r.cob,Cliente:x.r.cliente?.nom||'','Cédula':x.r.cliente?.ced||'','Cod crédito':x.cc,'Cal. mensual':x.r.cliente?.cm||'',Rodamiento:x.r.cliente?.rod||'','Tienda factura':tn(x),'Dado de baja':estBaja(x.r),Monto:+x.monto.toFixed(2)}));
+  const opts=`<option value="">Todas las tiendas activas</option>`+TI_ACT.map(t=>`<option value="${tiN(t)}" ${tiN(t)===sel?'selected':''}>${esc(t)}</option>`).join('')+`<option value="__OTRAS" ${sel==='__OTRAS'?'selected':''}>Fuera de tiendas activas / sin tienda</option>`;
+  return `<div class="card"><div class="ch"><div><h3>Retiros por tienda · ${esc(mesNombre(TI.mes))}</h3><div class="sub">Los mismos retiros del panel de supervisión, ligados a la tienda de cada crédito. Haz clic en una tienda o elígela abajo para ver su detalle.</div></div></div>
+   <div class="sumrow"><div class="s">Retiros en tiendas activas<b>${m$(tot)}</b></div><div class="s">Registros<b>${regs.size}</b></div>${otros>0?`<div class="s">Fuera de tiendas activas<b>${m$(otros)}</b></div>`:''}<div class="s">Total retiros del mes<b>${m$(tot+otros)}</b></div></div>
    <div class="tw"><table><thead><tr><th>Tienda</th><th class="num">Retiros $</th><th class="num">Registros</th></tr></thead><tbody>${rows}</tbody></table></div></div>
-   <div class="card" style="margin-top:14px"><h3>Detalle de retiros</h3><div class="tw" style="max-height:520px"><table><thead><tr><th>Fecha</th><th>Tienda</th><th>Cobrador</th><th>Cliente</th><th>Crédito</th><th class="num">Monto</th><th>Baja</th></tr></thead><tbody>${det||'<tr><td colspan="7" class="center mut" style="padding:24px">Sin retiros en tiendas activas</td></tr>'}</tbody></table></div></div>`;
+   <div class="card" style="margin-top:14px"><div class="ch"><div><h3>Detalle de retiros</h3><div class="sub">${sel?'Filtrado por tienda':'Todas las tiendas activas'} · ${subR} registro${subR===1?'':'s'} · ${m$(sub)}</div></div><div style="display:flex;gap:8px;flex-wrap:wrap"><select class="inp" style="width:auto;max-width:320px" onchange="tiSelRet(this.value)">${opts}</select><button class="btn ghost sm" onclick="xlsxDownload(window._tiRet||[],'Retiros_Tiendas_${TI.mes}.xlsx','Retiros')">⬇ Excel</button></div></div>
+   <div class="tw" style="max-height:560px"><table><thead><tr><th>Fecha</th><th>Cobrador</th><th>Cliente</th><th>Cédula</th><th>Cod crédito</th><th class="center">Cal. mensual</th><th class="center">Rodamiento</th><th>Tienda factura</th><th>Dado de baja</th><th class="num">Monto</th></tr></thead><tbody>${det||'<tr><td colspan="10" class="center mut" style="padding:24px">Sin retiros para mostrar</td></tr>'}</tbody></table></div></div>`;
 }
 /* ---- refinanciamientos ---- */
 function tiVRefis(){
@@ -1116,7 +1135,7 @@ async function cargarCob(){
   const id=S.cob;marcarAcceso();
   S.unsub.push(DB.listen('metas',[],docs=>{const d=docs.find(x=>x.id===S.mes);S.metas=d?d.cobs:null;S.libresMes=d&&d.libres?d.libres:null;if(tabActual==='c-inicio')renderCInicio();}));
   S.unsub.push(DB.listen('registros',[['cob','==',id],['mes','==',S.mes]],docs=>{S.regs=docs;if(tabActual==='c-inicio')renderCInicio();}));
-  S.unsub.push(DB.listen('estrategias',[],docs=>{S.estrat=docs.find(d=>d.id==='actual')||null;if(tabActual==='c-estrat')renderCEstrat();}));
+  S.unsub.push(DB.listen('estrategias',[],docs=>{S.estrat=docs.find(d=>d.id==='actual')||null;S.aviso=docs.find(d=>d.id==='aviso')||null;if(tabActual==='c-estrat')renderCEstrat();mostrarAviso();}));
   S.unsub.push(DB.listen('alertas',[['cob','==',id]],docs=>{S.alerta=docs[0]||null;renderCAlerta();}));
   const [ls,rf,mo,ce]=await Promise.all([DB.get('listado/'+id),DB.get('refis/'+id),DB.get('moracob/'+id),DB.get('cobrocob/'+id)]).catch(e=>{console.error(e);return [null,null,null,null];});
   S.cobroCob=ce&&ce.dias?ce.dias:{};
@@ -1659,12 +1678,39 @@ function estratHTML(txt){const MES=['ene','feb','mar','abr','may','jun','jul','a
   return `<div class="es-h"><div class="k">CARTERA ZONA MILAGRO</div><h2>${esc(head||'Estrategias de cobranza')}</h2>${intro.join('').replace(/<p>/g,'<p>')}</div>`+
     cards.map((c,i)=>`<div class="es-c" style="--ac:${AC[i%AC.length]}"><h3>${esc(c.t)}</h3>${c.b.join('')}</div>`).join('');}
 function renderCEstrat(){const t=S.estrat&&S.estrat.texto!=null?S.estrat.texto:ESTRAT_BASE;$('cEstrat').innerHTML=estratHTML(t)+(S.estrat&&S.estrat.ts?`<div class="xs mut center" style="margin:6px 0 14px">Actualizado ${new Date(S.estrat.ts).toLocaleString('es-EC')}</div>`:'');}
-function renderSEstrat(){const ta=$('esTxt');if(!ta.dataset.cargado){ta.value=S.estrat&&S.estrat.texto!=null?S.estrat.texto:ESTRAT_BASE;ta.dataset.cargado='1';}
+function renderSEstrat(){avInit();const ta=$('esTxt');if(!ta.dataset.cargado){ta.value=S.estrat&&S.estrat.texto!=null?S.estrat.texto:ESTRAT_BASE;ta.dataset.cargado='1';}
   $('esInfo').textContent=S.estrat&&S.estrat.ts?`Última publicación: ${new Date(S.estrat.ts).toLocaleString('es-EC')}`:'Aún no publicado: los cobradores ven la plantilla de noviembre 2026.';esPrev();}
 function esPrev(){$('esPrev').innerHTML=estratHTML($('esTxt').value);}
 async function guardarEstrat(b){const texto=$('esTxt').value.slice(0,20000);b.disabled=true;
   try{const d={texto,ts:Date.now()};await DB.set('estrategias/actual',d);S.estrat=d;toast('✅ Estrategia publicada para los cobradores');renderSEstrat();}
   catch(e){console.error(e);toast('No se pudo guardar: '+(e.code||e.message));}b.disabled=false;}
+/* ---- aviso con imagen al abrir la app ---- */
+let AV_TMP=null,_avK=null;
+function mostrarAviso(){const a=S.aviso;if(!a||!a.activo||!a.img||S.rol==='sup')return;
+  let visto='';try{visto=localStorage.getItem('czm_aviso')||'';}catch(e){}
+  if(_avK===a.ts)return;if(visto===String(a.ts)&&!a.siempre)return;_avK=a.ts;
+  modal(`<div style="text-align:center">${a.titulo?`<h3 style="margin:0 0 10px">${esc(a.titulo)}</h3>`:''}<img src="${a.img}" alt="Aviso" style="max-width:100%;max-height:68vh;border-radius:12px;display:block;margin:0 auto"><button class="btn gold" style="margin-top:14px;width:100%" onclick="cerrarAviso()">✅ Entendido</button></div>`);
+  $('modalBox').style.maxWidth='560px';}
+function cerrarAviso(){try{localStorage.setItem('czm_aviso',String(_avK));}catch(e){}closeModal();}
+async function avInit(){if(S.aviso===undefined){try{S.aviso=await DB.get('estrategias/aviso');}catch(e){S.aviso=null;}}
+  const a=S.aviso;if(a&&a.activo&&a.img&&!AV_TMP){AV_TMP=null;if($('avTit')&&!$('avTit').dataset.c){$('avTit').value=a.titulo||'';$('avRep').value=a.siempre?'1':'';$('avTit').dataset.c='1';}}
+  avPrev();}
+function avPrev(){const a=S.aviso,img=AV_TMP||(a&&a.activo&&a.img)||'';const t=$('avTit')?$('avTit').value:'';
+  $('avPrev').innerHTML=img?`${t?`<div class="b" style="margin-bottom:8px;color:var(--navy)">${esc(t)}</div>`:''}<img src="${img}" alt="Vista previa" style="max-width:100%;max-height:300px;border-radius:10px"><div class="btn gold sm" style="margin-top:10px;display:block">✅ Entendido</div>`:'<div class="xs mut" style="padding:20px">Aún no hay imagen</div>';
+  $('avEstado').textContent=a&&a.activo&&a.img?'🟢 Aviso activo':'⚪ Sin aviso';$('avEstado').className='chip'+(a&&a.activo&&a.img?' gold on':'');
+  $('avInfo').textContent=a&&a.ts&&a.activo?`Publicado ${new Date(a.ts).toLocaleString('es-EC')}`:'';}
+function avPick(file){if(!file)return;const fr=new FileReader();
+  fr.onload=()=>{const im=new Image();im.onload=()=>{let w=im.width,h=im.height;const M=1280;if(w>M){h=Math.round(h*M/w);w=M;}
+    const cv=document.createElement('canvas');let q=.85,url='';
+    for(let i=0;i<8;i++){cv.width=w;cv.height=h;const x=cv.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,w,h);x.drawImage(im,0,0,w,h);url=cv.toDataURL('image/jpeg',q);if(url.length<650000)break;q=Math.max(.4,q-.1);w=Math.round(w*.85);h=Math.round(h*.85);}
+    if(url.length>=800000){toast('La imagen es muy pesada, prueba con otra más pequeña');return;}
+    AV_TMP=url;avPrev();};im.onerror=()=>toast('No pude leer esa imagen');im.src=fr.result;};fr.readAsDataURL(file);}
+async function avPublicar(b){const img=AV_TMP||(S.aviso&&S.aviso.activo&&S.aviso.img)||'';if(!img)return toast('Primero elige una imagen');
+  b.disabled=true;try{const d={activo:true,img,titulo:$('avTit').value.trim().slice(0,80),siempre:!!$('avRep').value,ts:Date.now()};await DB.set('estrategias/aviso',d);S.aviso=d;AV_TMP=null;$('avFile').value='';toast('✅ Aviso publicado para los cobradores');avPrev();}
+  catch(e){console.error(e);toast('No se pudo publicar: '+(e.code||e.message));}b.disabled=false;}
+async function avQuitar(b){if(!(S.aviso&&S.aviso.activo)&&!AV_TMP){AV_TMP=null;$('avFile').value='';return avPrev();}if(!confirm('¿Quitar el aviso? Los cobradores dejarán de verlo.'))return;
+  b.disabled=true;try{const d={activo:false,img:'',titulo:'',ts:Date.now()};await DB.set('estrategias/aviso',d);S.aviso=d;AV_TMP=null;$('avFile').value='';$('avTit').value='';toast('Aviso quitado');avPrev();}
+  catch(e){console.error(e);toast('No se pudo quitar: '+(e.code||e.message));}b.disabled=false;}
 /* ---- correos a jefes de tienda (retiros pendientes de baja) ---- */
 let CORREOS=null,_corGrupos=[],TCRED=null;
 function tiendaDeCred(cob,cc,t){if(t)return t;const l=S.listado[cob];const c=l&&(l.cl||[]).flatMap(x=>x.creds||[]).find(k=>k.cc===cc);if(c&&c.t)return c.t;
