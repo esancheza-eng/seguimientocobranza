@@ -1135,7 +1135,7 @@ async function cargarCob(){
   const id=S.cob;marcarAcceso();
   S.unsub.push(DB.listen('metas',[],docs=>{const d=docs.find(x=>x.id===S.mes);S.metas=d?d.cobs:null;S.libresMes=d&&d.libres?d.libres:null;if(tabActual==='c-inicio')renderCInicio();}));
   S.unsub.push(DB.listen('registros',[['cob','==',id],['mes','==',S.mes]],docs=>{S.regs=docs;if(tabActual==='c-inicio')renderCInicio();}));
-  S.unsub.push(DB.listen('estrategias',[],docs=>{S.estrat=docs.find(d=>d.id==='actual')||null;S.aviso=docs.find(d=>d.id==='aviso')||null;if(tabActual==='c-estrat')renderCEstrat();mostrarAviso();}));
+  S.unsub.push(DB.listen('estrategias',[],docs=>{S.estrat=docs.find(d=>d.id==='actual')||null;S.aviso=(docs.find(d=>d.id==='actual')||{}).aviso||null;if(tabActual==='c-estrat')renderCEstrat();mostrarAviso();}));
   S.unsub.push(DB.listen('alertas',[['cob','==',id]],docs=>{S.alerta=docs[0]||null;renderCAlerta();}));
   const [ls,rf,mo,ce]=await Promise.all([DB.get('listado/'+id),DB.get('refis/'+id),DB.get('moracob/'+id),DB.get('cobrocob/'+id)]).catch(e=>{console.error(e);return [null,null,null,null];});
   S.cobroCob=ce&&ce.dias?ce.dias:{};
@@ -1682,7 +1682,7 @@ function renderSEstrat(){avInit();const ta=$('esTxt');if(!ta.dataset.cargado){ta
   $('esInfo').textContent=S.estrat&&S.estrat.ts?`Última publicación: ${new Date(S.estrat.ts).toLocaleString('es-EC')}`:'Aún no publicado: los cobradores ven la plantilla de noviembre 2026.';esPrev();}
 function esPrev(){$('esPrev').innerHTML=estratHTML($('esTxt').value);}
 async function guardarEstrat(b){const texto=$('esTxt').value.slice(0,20000);b.disabled=true;
-  try{const d={texto,ts:Date.now()};await DB.set('estrategias/actual',d);S.estrat=d;toast('✅ Estrategia publicada para los cobradores');renderSEstrat();}
+  try{const d={texto,ts:Date.now()};await DB.set('estrategias/actual',d,true);S.estrat={...(S.estrat||{}),...d};toast('✅ Estrategia publicada para los cobradores');renderSEstrat();}
   catch(e){console.error(e);toast('No se pudo guardar: '+(e.code||e.message));}b.disabled=false;}
 /* ---- aviso con imagen al abrir la app ---- */
 let AV_TMP=null,_avK=null;
@@ -1692,7 +1692,7 @@ function mostrarAviso(){const a=S.aviso;if(!a||!a.activo||!a.img||S.rol==='sup')
   modal(`<div style="text-align:center">${a.titulo?`<h3 style="margin:0 0 10px">${esc(a.titulo)}</h3>`:''}<img src="${a.img}" alt="Aviso" style="max-width:100%;max-height:68vh;border-radius:12px;display:block;margin:0 auto"><button class="btn gold" style="margin-top:14px;width:100%" onclick="cerrarAviso()">✅ Entendido</button></div>`);
   $('modalBox').style.maxWidth='560px';}
 function cerrarAviso(){try{localStorage.setItem('czm_aviso',String(_avK));}catch(e){}closeModal();}
-async function avInit(){if(S.aviso===undefined){try{S.aviso=await DB.get('estrategias/aviso');}catch(e){S.aviso=null;}}
+async function avInit(){if(S.aviso===undefined){S.aviso=(S.estrat&&S.estrat.aviso)||null;}
   const a=S.aviso;if(a&&a.activo&&a.img&&!AV_TMP){AV_TMP=null;if($('avTit')&&!$('avTit').dataset.c){$('avTit').value=a.titulo||'';$('avRep').value=a.siempre?'1':'';$('avTit').dataset.c='1';}}
   avPrev();}
 function avPrev(){const a=S.aviso,img=AV_TMP||(a&&a.activo&&a.img)||'';const t=$('avTit')?$('avTit').value:'';
@@ -1702,14 +1702,14 @@ function avPrev(){const a=S.aviso,img=AV_TMP||(a&&a.activo&&a.img)||'';const t=$
 function avPick(file){if(!file)return;const fr=new FileReader();
   fr.onload=()=>{const im=new Image();im.onload=()=>{let w=im.width,h=im.height;const M=1280;if(w>M){h=Math.round(h*M/w);w=M;}
     const cv=document.createElement('canvas');let q=.85,url='';
-    for(let i=0;i<8;i++){cv.width=w;cv.height=h;const x=cv.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,w,h);x.drawImage(im,0,0,w,h);url=cv.toDataURL('image/jpeg',q);if(url.length<650000)break;q=Math.max(.4,q-.1);w=Math.round(w*.85);h=Math.round(h*.85);}
-    if(url.length>=800000){toast('La imagen es muy pesada, prueba con otra más pequeña');return;}
+    for(let i=0;i<8;i++){cv.width=w;cv.height=h;const x=cv.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,w,h);x.drawImage(im,0,0,w,h);url=cv.toDataURL('image/jpeg',q);if(url.length<600000)break;q=Math.max(.4,q-.1);w=Math.round(w*.85);h=Math.round(h*.85);}
+    if(url.length>=700000){toast('La imagen es muy pesada, prueba con otra más pequeña');return;}
     AV_TMP=url;avPrev();};im.onerror=()=>toast('No pude leer esa imagen');im.src=fr.result;};fr.readAsDataURL(file);}
 async function avPublicar(b){const img=AV_TMP||(S.aviso&&S.aviso.activo&&S.aviso.img)||'';if(!img)return toast('Primero elige una imagen');
-  b.disabled=true;try{const d={activo:true,img,titulo:$('avTit').value.trim().slice(0,80),siempre:!!$('avRep').value,ts:Date.now()};await DB.set('estrategias/aviso',d);S.aviso=d;AV_TMP=null;$('avFile').value='';toast('✅ Aviso publicado para los cobradores');avPrev();}
+  b.disabled=true;try{const d={activo:true,img,titulo:$('avTit').value.trim().slice(0,80),siempre:!!$('avRep').value,ts:Date.now()};await DB.set('estrategias/actual',{aviso:d},true);S.aviso=d;S.estrat={...(S.estrat||{}),aviso:d};AV_TMP=null;$('avFile').value='';toast('✅ Aviso publicado para los cobradores');avPrev();}
   catch(e){console.error(e);toast('No se pudo publicar: '+(e.code||e.message));}b.disabled=false;}
 async function avQuitar(b){if(!(S.aviso&&S.aviso.activo)&&!AV_TMP){AV_TMP=null;$('avFile').value='';return avPrev();}if(!confirm('¿Quitar el aviso? Los cobradores dejarán de verlo.'))return;
-  b.disabled=true;try{const d={activo:false,img:'',titulo:'',ts:Date.now()};await DB.set('estrategias/aviso',d);S.aviso=d;AV_TMP=null;$('avFile').value='';$('avTit').value='';toast('Aviso quitado');avPrev();}
+  b.disabled=true;try{const d={activo:false,img:'',titulo:'',ts:Date.now()};await DB.set('estrategias/actual',{aviso:d},true);S.aviso=d;S.estrat={...(S.estrat||{}),aviso:d};AV_TMP=null;$('avFile').value='';$('avTit').value='';toast('Aviso quitado');avPrev();}
   catch(e){console.error(e);toast('No se pudo quitar: '+(e.code||e.message));}b.disabled=false;}
 /* ---- correos a jefes de tienda (retiros pendientes de baja) ---- */
 let CORREOS=null,_corGrupos=[],TCRED=null;
