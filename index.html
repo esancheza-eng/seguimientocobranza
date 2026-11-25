@@ -1164,7 +1164,7 @@ function refisDe(id,desde,hasta){return (S.refis[id]||[]).filter(x=>x.fc&&x.fc>=
 function rangoMes(mes){return [mes+'-01',mes+'-'+pad(diasMes(mes))];}
 function moraUlt(){return S.mora.length?S.mora[S.mora.length-1]:null;}
 function moraTot(snap,id){if(!snap)return null;return (snap.filas||[]).find(f=>f.cob===id&&f.cal==='Total')||null;}
-function moraZona(snap){if(!snap)return null;const t={si:0,sl:0,sc:0,sr:0};(snap.filas||[]).filter(f=>f.cal==='Total').forEach(f=>{t.si+=f.si;t.sl+=f.sl;t.sc+=f.sc;t.sr+=f.sr;});
+function moraZona(snap){if(!snap)return null;const t={si:0,sl:0,sc:0,sr:0};if(snap.zt&&snap.zt.si){['si','sl','sc','sr'].forEach(k=>t[k]=+snap.zt[k]||0);}else(snap.filas||[]).filter(f=>f.cal==='Total').forEach(f=>{t.si+=f.si;t.sl+=f.sl;t.sc+=f.sc;t.sr+=f.sr;});
   if(!t.si)return null;const pl=(t.sl+t.sr)/t.si,pc=t.sc/t.si;return {...t,pl,pc,pct:pl+pc};}
 
 /* =====================================================================
@@ -1442,7 +1442,7 @@ function renderTramos(){
   $('tbTramos').innerHTML='<thead><tr><th>Cobrador</th>'+TRAMOS.map(t=>`<th class="center">${t}</th>`).join('')+'<th class="center">Total</th></tr></thead><tbody>'+
     COBS.map(c=>`<tr><td class="cobn nowrap">${esc(c.corto)}</td>`+TRAMOS.concat(['Total']).map(t=>{const f=(snap?.filas||[]).find(x=>x.cob===c.id&&x.cal===t);
       if(f){tot[t]=tot[t]||{si:0,sl:0,sc:0,sr:0};['si','sl','sc','sr'].forEach(k=>tot[t][k]+=f[k]);}return cell(val(f));}).join('')+'</tr>').join('')+'</tbody>'+
-    '<tfoot><tr><td>Zona</td>'+TRAMOS.concat(['Total']).map(t=>{const v=val(tot[t]);return `<td class="center">${v==null?'—':moMetric==='si'?m0(v):pctTxt(v,2)}</td>`;}).join('')+'</tr></tfoot>';
+    '<tfoot><tr><td>Zona</td>'+TRAMOS.concat(['Total']).map(t=>{const v=val(t==='Total'&&snap&&snap.zt&&snap.zt.si?snap.zt:tot[t]);return `<td class="center">${v==null?'—':moMetric==='si'?m0(v):pctTxt(v,2)}</td>`;}).join('')+'</tr></tfoot>';
 }
 function renderMoraChart(){
   const id=$('moCobChart').value;const labs=S.mora.map(s=>dmy(s.id).slice(0,5));
@@ -1933,23 +1933,24 @@ async function publicarRefis(b){{const f0=$('rfFechaCarga')?.value||ayerYMD();if
   toast('✅ Refinanciamientos publicados');$('rfRes').innerHTML+=`<div class="okbox">✅ Guardado. ${rr.nuevos} refinanciamiento(s) nuevo(s)${rr.cancel?` · ${rr.cancel} ya no vienen en el archivo (cancelados) y se mantienen guardados`:''}.</div>`;renderEstado();}catch(e){console.error(e);toast('No se pudo publicar');b.disabled=false;}}
 
 /* ---- 3. Mora proyectada ---- */
-let MO_TMP=null;
+let MO_TMP=null,MO_ZT=null;
 async function leerMora(file){if(!file)return;$('moRes').innerHTML='<div class="info">Leyendo archivo…</div>';
   try{const aoa=await leerXlsx(file);const t=tablaDesde(aoa,'NOMBRE COBRADOR');if(!t)throw new Error('No encuentro la columna "NOMBRE COBRADOR".');
-    const filas=[];let last='';
-    t.forEach(r=>{let nm=String(r['NOMBRE COBRADOR']??'').trim();if(nm)last=nm;else nm=last;const cal=String(r['Calificacion Mensual']??'').trim();
+    const filas=[];let last='';let zt=null;
+    t.forEach(r=>{let nm=String(r['NOMBRE COBRADOR']??'').trim();const nmRaw=nm;if(nm)last=nm;else nm=last;const cal=String(r['Calificacion Mensual']??'').trim();
+      if(nmRaw.toLowerCase()==='total'&&!cal){const si=num(r['Saldo_Inicial']);if(si>0)zt={si,sd:num(r['Saldo_Deteriora']),sc:num(r['Saldo_Contiene']),sl:num(r['Saldo_Libera']),sr:num(r['Saldo_Recaudado'])};return;}
       if(!nm||!cal)return;const cob=cobDe(nm);if(!cob)return;
       filas.push({cob:cob.id,cal:cal==='Total'?'Total':normCalif(cal),si:num(r['Saldo_Inicial']),sd:num(r['Saldo_Deteriora']),sc:num(r['Saldo_Contiene']),sl:num(r['Saldo_Libera']),sr:num(r['Saldo_Recaudado'])});});
     if(!filas.length)throw new Error('El archivo no tiene cobradores del equipo.');
-    MO_TMP=filas;const z=moraZona({filas});const nC=new Set(filas.map(f=>f.cob)).size;
+    MO_TMP=filas;MO_ZT=zt;const z=moraZona({filas,zt});const nC=new Set(filas.map(f=>f.cob)).size;
     $('moRes').innerHTML=`<div class="okbox">📄 ${esc(file.name)} · ${nC} cobradores del equipo · ${filas.length} filas<br>Zona: Libera <b>${pctTxt(z.pl,2)}</b> · Contiene <b>${pctTxt(z.pc,2)}</b> · Contiene total <b>${pctTxt(z.pct,2)}</b></div>`+
       `<div class="fld" style="margin-top:10px"><label>Fecha del corte <span class="xs mut">(por defecto, el día anterior)</span></label><input type="date" id="moFechaCarga" class="inp" value="${ayerYMD()}" max="${hoyYMD()}"></div>`+
       `<button class="btn gold block" onclick="publicarMora(this)">🚀 Guardar corte del día</button>`;
   }catch(e){console.error(e);$('moRes').innerHTML=`<div class="info" style="background:#fee2e2;border-color:#fecaca;color:#7f1d1d">${esc(e.message)}</div>`;}}
 async function publicarMora(b){const f=$('moFechaCarga').value;if(!f)return toast('Elige la fecha');if(S.mora.some(x=>x.id===f)&&!confirm('Ya existe un corte de mora del '+dmy(f)+'. ¿Reemplazarlo con este archivo?'))return;b.disabled=true;
-  try{await DB.set('mora/'+f,{filas:MO_TMP,ts:Date.now()});
+  try{await DB.set('mora/'+f,{filas:MO_TMP,zt:MO_ZT||null,ts:Date.now()});
     for(const c of COBS){const mine=MO_TMP.filter(x=>x.cob===c.id);if(!mine.length)continue;const d=await DB.get('moracob/'+c.id);const dias=(d&&d.dias)||{};dias[f]=mine;await DB.set('moracob/'+c.id,{dias});}
-    const i=S.mora.findIndex(s=>s.id===f);const doc={id:f,filas:MO_TMP};if(i>=0)S.mora[i]=doc;else S.mora.push(doc);S.mora.sort((a,b)=>a.id.localeCompare(b.id));
+    const i=S.mora.findIndex(s=>s.id===f);const doc={id:f,filas:MO_TMP,zt:MO_ZT||null};if(i>=0)S.mora[i]=doc;else S.mora.push(doc);S.mora.sort((a,b)=>a.id.localeCompare(b.id));
     const est={mora:{ts:Date.now(),ultima:S.mora[S.mora.length-1].id,cortes:S.mora.length}};await DB.set('config/estado',est,true);Object.assign(S.estado,est);
     toast('✅ Corte '+dmy(f)+' guardado');$('moRes').innerHTML+=`<div class="okbox">✅ Corte ${dmy(f)} guardado. Ya son ${S.mora.length} corte(s).</div>`;renderEstado();
   }catch(e){console.error(e);toast('No se pudo guardar');b.disabled=false;}}
@@ -2351,6 +2352,7 @@ function svDatos(id){
   S.mora.forEach(sn=>{const rows=(sn.filas||[]).filter(f=>A||f.cob===id);if(!rows.length)return;
     if(!A){moraCob[sn.id]=rows;return;}
     const g={};rows.forEach(f=>{const o=g[f.cal]=g[f.cal]||{cal:f.cal,si:0,sd:0,sc:0,sl:0,sr:0};['si','sd','sc','sl','sr'].forEach(k=>o[k]+=(+f[k]||0));});
+    if(sn.zt&&sn.zt.si)g['Total']={cal:'Total',si:+sn.zt.si||0,sd:+sn.zt.sd||0,sc:+sn.zt.sc||0,sl:+sn.zt.sl||0,sr:+sn.zt.sr||0};
     moraCob[sn.id]=Object.values(g);});
   S.cobro.forEach(sn=>{const rows=(sn.filas||[]).filter(f=>A||f.cob===id);if(!rows.length)return;
     if(!A){cobroCob[sn.id]=rows[0];return;}
